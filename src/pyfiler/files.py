@@ -17,7 +17,6 @@ def _validate_encoding(encoding):
 
 
 def _atomic_write_text(path, contents, encoding):
-    """Write text through a same-directory temporary file, then replace atomically."""
     path = Path(path)
     temporary = None
     try:
@@ -37,6 +36,14 @@ def _atomic_write_text(path, contents, encoding):
             except OSError:
                 pass
         raise
+
+
+def _temporary_path(directory, prefix, suffix):
+    handle = tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix=suffix, delete=False)
+    path = Path(handle.name)
+    handle.close()
+    path.unlink(missing_ok=True)
+    return path
 
 
 def read_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
@@ -188,8 +195,7 @@ def move_file(source, destination, overwrite=False):
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if overwrite and dst.exists():
-            backup = Path(tempfile.mkstemp(prefix=f".{dst.name}.", suffix=".pyfiler-backup", dir=dst.parent)[1])
-            backup.unlink()
+            backup = _temporary_path(dst.parent, f".{dst.name}.", ".pyfiler-backup")
             dst.rename(backup)
         shutil.move(str(src), str(dst))
         if backup is not None:
