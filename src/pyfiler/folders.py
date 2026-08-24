@@ -17,8 +17,7 @@ def create_folder(name, contents=None, trajectory=None):
         source = to_path(child)
         if not source.exists(): raise PathNotFoundError(str(source))
         if source.resolve() == path.resolve(): raise SourceEqualsDestinationError(str(source))
-        if source.is_dir() and path.resolve().is_relative_to(source.resolve()):
-            raise RecursiveOperationError(f"Cannot copy {source} into its own descendant {path}.")
+        if source.is_dir() and path.resolve().is_relative_to(source.resolve()): raise RecursiveOperationError(f"Cannot copy {source} into its own descendant {path}.")
         sources.append(source)
     try:
         path.mkdir(parents=True)
@@ -44,8 +43,7 @@ def move_into(child, parent):
     destination = destination_folder / source.name
     if source == destination: raise SourceEqualsDestinationError(str(source))
     if destination.exists(): raise DestinationExistsError(str(destination))
-    if source.is_dir() and destination_folder.is_relative_to(source):
-        raise RecursiveOperationError(f"Cannot move {source} into its own descendant {destination_folder}.")
+    if source.is_dir() and destination_folder.is_relative_to(source): raise RecursiveOperationError(f"Cannot move {source} into its own descendant {destination_folder}.")
     try: return to_path(shutil.move(str(source), str(destination)))
     except OSError as exc: raise OperationError(str(source)) from exc
 
@@ -54,13 +52,14 @@ def list_folder(path): return list(ensure_folder(path).iterdir())
 
 
 def _validate_children(folder, children):
-    if not isinstance(children, list) or not all(isinstance(x, str) for x in children):
-        raise ContentTypeError("children must be a list of strings.")
-    targets = []
+    if not isinstance(children, list) or not all(isinstance(x, str) for x in children): raise ContentTypeError("children must be a list of strings.")
+    targets, seen = [], set()
     for name in children:
         if not name.strip() or name in {".", ".."}: raise InvalidPathError("child names must be non-empty direct child names")
         candidate = Path(name)
         if candidate.is_absolute() or candidate.name != name: raise InvalidPathError(f"children must contain direct child names: {name!r}")
+        if name in seen: continue
+        seen.add(name)
         target = folder / name
         if not target.exists(): raise PathNotFoundError(str(target))
         targets.append(target)
