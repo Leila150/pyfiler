@@ -1,20 +1,29 @@
 """Directory tree and aggregate statistics."""
+from __future__ import annotations
+
 from collections import Counter
-from .utils import ensure_folder
+
 from .exceptions import TreeDepthError
+from .utils import ensure_folder
 
 
 def directory_tree(path, max_depth=None):
     """Return a readable tree representation of a directory."""
-    if max_depth is not None and (not isinstance(max_depth, int) or max_depth < 0):
-        raise TreeDepthError("max_depth must be non-negative")
+    if max_depth is not None and (
+        not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0
+    ):
+        raise TreeDepthError("max_depth must be a non-negative integer or None")
+
     root = ensure_folder(path)
     lines = [root.name or str(root)]
 
     def walk(folder, prefix, depth):
         if max_depth is not None and depth >= max_depth:
             return
-        children = sorted(folder.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        try:
+            children = sorted(folder.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError:
+            return
         for i, child in enumerate(children):
             last = i == len(children) - 1
             lines.append(prefix + ("└── " if last else "├── ") + child.name)
@@ -26,7 +35,14 @@ def directory_tree(path, max_depth=None):
 
 
 def directory_size(path):
-    return sum(p.stat().st_size for p in ensure_folder(path).rglob("*") if p.is_file())
+    total = 0
+    for item in ensure_folder(path).rglob("*"):
+        if item.is_file():
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
+    return total
 
 
 def count_files(path):
