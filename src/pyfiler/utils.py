@@ -2,7 +2,7 @@
 from __future__ import annotations
 import os
 from pathlib import Path
-from .exceptions import EmptyPathError, InvalidPathError, PathOutsideRootError, InvalidLineListError, InvalidLineError, ContentTypeError, PyFilerFileNotFoundError, NotAFileError, FolderNotFoundError, NotAFolderError
+from .exceptions import EmptyPathError, InvalidPathError, PathOutsideRootError, InvalidLineListError, InvalidLineError, ContentTypeError, PyFilerFileNotFoundError, NotAFileError, FolderNotFoundError, NotAFolderError, SymlinkTraversalError
 
 def to_path(value):
     if value is None or (isinstance(value,str) and not value.strip()): raise EmptyPathError("A path is required.")
@@ -12,19 +12,18 @@ def to_path(value):
 def ensure_file(value):
     path=to_path(value)
     try:
-        if not path.exists(): raise PyFilerFileNotFoundError(str(path))
-        if not path.is_file(): raise NotAFileError(str(path))
-    except (PyFilerFileNotFoundError,NotAFileError): raise
+        info=path.stat()
+    except FileNotFoundError as exc: raise PyFilerFileNotFoundError(str(path)) from exc
     except OSError as exc: raise NotAFileError(str(path)) from exc
+    if not path.is_file(): raise NotAFileError(str(path))
     return path
 
 def ensure_folder(value):
     path=to_path(value)
-    try:
-        if not path.exists(): raise FolderNotFoundError(str(path))
-        if not path.is_dir(): raise NotAFolderError(str(path))
-    except (FolderNotFoundError,NotAFolderError): raise
+    try: path.stat()
+    except FileNotFoundError as exc: raise FolderNotFoundError(str(path)) from exc
     except OSError as exc: raise NotAFolderError(str(path)) from exc
+    if not path.is_dir(): raise NotAFolderError(str(path))
     return path
 
 def validate_lines(lines):
@@ -35,21 +34,38 @@ def validate_lines(lines):
 def validate_contents(contents):
     if not isinstance(contents,str): raise ContentTypeError("contents must be a string.")
 
+def _reject_symlink_components(candidate):
+    current=Path(candidate.anchor) if candidate.anchor else Path('.')
+    for part in candidate.parts:
+        if part == candidate.anchor: continue
+        current=current/part
+        try:
+            if current.is_symlink(): raise SymlinkTraversalError(f"Symlink path component is not allowed: {current}")
+        except SymlinkTraversalError: raise
+        except OSError as exc: raise SymlinkTraversalError(f"Unable to inspect path component: {current}") from exc
+
 def safe_inside(path, root, reject_symlinks=False):
-    """Resolve and enforce a root boundary; optionally reject symlink components."""
+    """Resolve and enforce a root boundary.
+
+    When reject_symlinks is enabled, every existing component is checked both
+    before and after resolution. This is deliberately a preflight defense;
+    applications facing hostile concurrent processes should additionally use
+    OS descriptor-relative APIs where available.
+    """
     raw=to_path(path); base=to_path(root).resolve()
     candidate=raw if raw.is_absolute() else base/raw
-    if reject_symlinks:
-        current=Path(candidate.anchor) if candidate.anchor else Path('.')
-        for part in candidate.parts:
-            if part == candidate.anchor: continue
-            current=current/part
-            try:
-                if current.is_symlink(): raise PathOutsideRootError(f"Symlink path component is not allowed: {current}")
-            except OSError as exc: raise PathOutsideRootError(f"Unable to inspect path component: {current}") from exc
-    candidate=raw.resolve()
-    try: candidate.relative_to(base)
-    except ValueError as exc: raise PathOutsideRootError(f"{candidate} is outside {base}") from exc
-    return candidate
+    if reject_symlinks: _reject_symlink_components(candidate)
+    try: resolved=candidate.resolve(strict=False)
+    except OSError as exc: raise PathOutsideRootError(f"Unable to resolve path: {candidate}") from exc
+    try: resolved.relative_to(base)
+    except ValueError as exc: raise PathOutsideRootError(f"{resolved} is outside {base}") from exc
+    if reject_symlinks: _reject_symlink_components(candidate)
+    try:
+        resolved_again=candidate.resolve(strict=False)
+        resolved_again.relative_to(base)
+    except ValueError as exc: raise PathOutsideRootError(f"{resolved_again} is outside {base}") from exc
+    except OSError as exc: raise PathOutsideRootError(f"Unable to revalidate path: {candidate}") from exc
+    if resolved_again != resolved: raise PathOutsideRootError(f"Path changed during security validation: {candidate}")
+    return resolved_again
 
 def is_pathlike(value): return isinstance(value,(str,bytes,os.PathLike))
