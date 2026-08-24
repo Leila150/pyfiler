@@ -35,7 +35,7 @@ def create_folder(name, contents=None, trajectory=None):
     return path
 
 
-def add_parent(child, parent):
+def move_into(child, parent):
     """Move a file or folder into a parent folder."""
     source = to_path(child).resolve()
     destination_folder = ensure_folder(parent).resolve()
@@ -64,25 +64,24 @@ def add_parent(child, parent):
         raise OperationError(str(source)) from exc
 
 
-def folder_contents(trajectory):
-    return list(ensure_folder(trajectory).iterdir())
+def list_folder(path):
+    """Return all direct children of a folder."""
+    return list(ensure_folder(path).iterdir())
 
 
-def folder_remove_contents(trajectory, child):
-    """Remove named direct children without allowing path traversal."""
-    folder = ensure_folder(trajectory).resolve()
-    if not isinstance(child, list) or not all(isinstance(x, str) for x in child):
-        raise ContentTypeError("child must be a list of strings.")
+def remove_from_folder(path, children):
+    """Remove named direct children from a folder without path traversal."""
+    folder = ensure_folder(path).resolve()
+    if not isinstance(children, list) or not all(isinstance(x, str) for x in children):
+        raise ContentTypeError("children must be a list of strings.")
 
     removed = []
-    for name in child:
+    for name in children:
         if not name.strip() or name in {".", ".."}:
             raise InvalidPathError("child names must be non-empty direct child names")
         candidate = Path(name)
         if candidate.is_absolute() or candidate.name != name:
-            raise InvalidPathError(
-                f"child must be a direct child name, not a path: {name!r}"
-            )
+            raise InvalidPathError(f"children must contain direct child names, not paths: {name!r}")
 
         target = folder / name
         if not target.exists():
@@ -114,21 +113,17 @@ def delete_folder(path, recursive=False):
     return True
 
 
-def list_dir(path):
-    return folder_contents(path)
-
-
 def list_files(path):
-    return [p for p in folder_contents(path) if p.is_file()]
+    return [p for p in list_folder(path) if p.is_file()]
 
 
 def list_folders(path):
-    return [p for p in folder_contents(path) if p.is_dir()]
+    return [p for p in list_folder(path) if p.is_dir()]
 
 
 def clear_folder(path):
     folder = ensure_folder(path)
-    return folder_remove_contents(folder, [p.name for p in folder.iterdir()])
+    return remove_from_folder(folder, [p.name for p in folder.iterdir()])
 
 
 def copy_folder(source, destination, overwrite=False):
@@ -157,9 +152,7 @@ def move_folder(source, destination, overwrite=False):
     except ValueError:
         pass
     else:
-        raise RecursiveOperationError(
-            f"Cannot move {src} into its own descendant {dst}."
-        )
+        raise RecursiveOperationError(f"Cannot move {src} into its own descendant {dst}.")
 
     try:
         if overwrite and dst.exists():
@@ -184,3 +177,10 @@ def rename_folder(path, new_name):
         return src.rename(dst)
     except OSError as exc:
         raise FolderRenameError(str(src)) from exc
+
+
+# Backwards-compatible aliases.
+add_parent = move_into
+folder_contents = list_folder
+folder_remove_contents = remove_from_folder
+list_dir = list_folder
