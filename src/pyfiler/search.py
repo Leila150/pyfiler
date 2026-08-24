@@ -1,10 +1,10 @@
-"""Recursive file, folder and content search."""
-
+"""Recursive file, folder, and content search."""
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
-from .exceptions import InvalidExtensionError, InvalidPatternError
+from .exceptions import InvalidExtensionError, InvalidPatternError, SearchError
 from .utils import ensure_folder
 
 
@@ -14,72 +14,88 @@ def _validate_name(name: str) -> str:
     return name
 
 
+def _sorted_paths(paths):
+    return sorted(paths, key=lambda p: (str(p).casefold(), str(p)))
+
+
 def find_paths(path, name="*"):
-    """Find files and folders recursively by glob name."""
-    return list(ensure_folder(path).rglob(_validate_name(name)))
+    """Find files and folders recursively by glob name in deterministic order."""
+    return _sorted_paths(ensure_folder(path).rglob(_validate_name(name)))
 
 
 def find_files(path, name="*"):
     """Find files recursively by glob name."""
-    return [p for p in find_paths(path, name) if p.is_file()]
+    return _sorted_paths(p for p in find_paths(path, name) if p.is_file())
 
 
 def find_folders(path, name="*"):
     """Find folders recursively by glob name."""
-    return [p for p in find_paths(path, name) if p.is_dir()]
+    return _sorted_paths(p for p in find_paths(path, name) if p.is_dir())
+
+
+def _validate_encoding(encoding):
+    if not isinstance(encoding, str) or not encoding.strip():
+        raise ValueError("encoding must be a non-empty string")
+    return encoding
+
+
+def _read_lines(path, encoding):
+    try:
+        with path.open("r", encoding=encoding, newline="") as handle:
+            yield from handle
+    except (OSError, UnicodeError) as exc:
+        raise SearchError(f"Unable to read {path}: {exc}") from exc
 
 
 def find_text(path, text, encoding="utf-8"):
-    """Find files containing the supplied text."""
+    """Find files containing text without loading each file into memory."""
     if not isinstance(text, str):
         raise TypeError("text must be a string")
-    if not isinstance(encoding, str) or not encoding:
-        raise ValueError("encoding must be a non-empty string")
+    encoding = _validate_encoding(encoding)
     results = []
     for item in ensure_folder(path).rglob("*"):
-        if item.is_file():
-            try:
-                if text in item.read_text(encoding=encoding):
-                    results.append(item)
-            except (OSError, UnicodeError):
-                continue
-    return results
+        if not item.is_file():
+            continue
+        if any(text in line for line in _read_lines(item, encoding)):
+            results.append(item)
+    return _sorted_paths(results)
 
 
 def find_pattern(path, pattern, encoding="utf-8"):
-    """Find files whose contents match a regular expression."""
+    """Find files whose individual lines match a regular expression.
+
+    Matching is streamed line-by-line so large files do not need to be loaded
+    into memory. Patterns spanning multiple lines are therefore not supported.
+    """
     if not isinstance(pattern, str) or not pattern:
         raise InvalidPatternError("Pattern is required.")
-    if not isinstance(encoding, str) or not encoding:
-        raise ValueError("encoding must be a non-empty string")
+    encoding = _validate_encoding(encoding)
     try:
         regex = re.compile(pattern)
     except re.error as exc:
         raise InvalidPatternError(str(exc)) from exc
     results = []
     for item in ensure_folder(path).rglob("*"):
-        if item.is_file():
-            try:
-                if regex.search(item.read_text(encoding=encoding)):
-                    results.append(item)
-            except (OSError, UnicodeError):
-                continue
-    return results
+        if not item.is_file():
+            continue
+        if any(regex.search(line) for line in _read_lines(item, encoding)):
+            results.append(item)
+    return _sorted_paths(results)
 
 
 def find_by_extension(path, extension):
-    """Find files recursively by extension."""
+    """Find files by final extension, case-insensitively."""
     if not isinstance(extension, str) or not extension.strip():
         raise InvalidExtensionError("Extension is required.")
     extension = extension.strip()
     extension = extension if extension.startswith(".") else "." + extension
     if extension == ".":
         raise InvalidExtensionError("Extension is required.")
-    return [
+    return _sorted_paths(
         item
         for item in ensure_folder(path).rglob("*")
-        if item.is_file() and item.suffix.lower() == extension.lower()
-    ]
+        if item.is_file() and item.suffix.casefold() == extension.casefold()
+    )
 
 
 def find_by_size(path, minimum=None, maximum=None):
@@ -102,14 +118,14 @@ def find_by_size(path, minimum=None, maximum=None):
             continue
         try:
             size = item.stat().st_size
-        except OSError:
-            continue
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
         if minimum is not None and size < minimum:
             continue
         if maximum is not None and size > maximum:
             continue
         results.append(item)
-    return results
+    return _sorted_paths(results)
 
 
 # Backwards-compatible aliases.
