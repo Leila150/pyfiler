@@ -42,6 +42,7 @@ class InvalidLineListError(LineError): pass
 class SearchError(PyFilerError): pass
 class InvalidPatternError(SearchError, ValueError): pass
 class InvalidExtensionError(SearchError, ValueError): pass
+class SearchResourceLimitError(SearchError, RuntimeError): pass
 
 class StorageError(PyFilerError): pass
 class StoragePermissionError(StorageError, PermissionError): pass
@@ -55,6 +56,7 @@ class IOSPermissionError(StoragePermissionError): pass
 
 class SecurityError(PyFilerError): pass
 class RootAccessDeniedError(SecurityError, PermissionError): pass
+class SymlinkTraversalError(SecurityError, PermissionError): pass
 
 class OperationError(PyFilerError): pass
 class InvalidOperationError(OperationError, ValueError): pass
@@ -62,6 +64,8 @@ class OperationConflictError(OperationError): pass
 class DestinationExistsError(OperationConflictError, FileExistsError): pass
 class SourceEqualsDestinationError(OperationConflictError, ValueError): pass
 class RecursiveOperationError(OperationError): pass
+class ConcurrentModificationError(OperationError, RuntimeError): pass
+class TransactionError(OperationError, RuntimeError): pass
 
 class ConfigurationError(PyFilerError): pass
 class InvalidRootError(ConfigurationError, ValueError): pass
