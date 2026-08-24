@@ -1,14 +1,27 @@
 """Path manipulation helpers."""
+
+from __future__ import annotations
+
 from pathlib import Path
+
 from .utils import to_path
 
 
 def absolute_path(path):
+    """Return the absolute, normalized path as a string."""
     return str(to_path(path).resolve())
 
 
 def relative_path(path, start=None):
-    return str(to_path(path).resolve().relative_to(to_path(start or Path.cwd()).resolve()))
+    """Return ``path`` relative to ``start`` (or the current directory)."""
+    target = to_path(path).resolve()
+    base = to_path(start if start is not None else Path.cwd()).resolve()
+    try:
+        return str(target.relative_to(base))
+    except ValueError as exc:
+        raise ValueError(
+            f"Path {target!s} is not inside start path {base!s}"
+        ) from exc
 
 
 def parent_path(path):
@@ -28,7 +41,12 @@ def file_stem(path):
 
 
 def join_paths(*parts):
-    return str(Path(parts[0]).joinpath(*parts[1:])) if parts else ""
+    """Join path components without silently dropping earlier components."""
+    if not parts:
+        return ""
+    if any(part is None for part in parts):
+        raise TypeError("path components cannot be None")
+    return str(Path(parts[0]).joinpath(*(str(part) for part in parts[1:])))
 
 
 def normalize_path(path):
