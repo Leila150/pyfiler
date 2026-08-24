@@ -9,7 +9,7 @@ from .utils import ensure_folder
 
 
 def _validate_name(name: str) -> str:
-    if not isinstance(name, str) or not name:
+    if not isinstance(name, str) or not name.strip():
         raise ValueError("name must be a non-empty string")
     return name
 
@@ -18,9 +18,20 @@ def _sorted_paths(paths):
     return sorted(paths, key=lambda p: (str(p).casefold(), str(p)))
 
 
+def _walk(path, pattern="*"):
+    """Yield matching paths while converting traversal failures to SearchError."""
+    root = ensure_folder(path)
+    try:
+        iterator = root.rglob(pattern)
+        for item in iterator:
+            yield item
+    except OSError as exc:
+        raise SearchError(f"Unable to search {root}: {exc}") from exc
+
+
 def find_paths(path, name="*"):
     """Find files and folders recursively by glob name in deterministic order."""
-    return _sorted_paths(ensure_folder(path).rglob(_validate_name(name)))
+    return _sorted_paths(_walk(path, _validate_name(name)))
 
 
 def find_files(path, name="*"):
@@ -42,7 +53,8 @@ def _validate_encoding(encoding):
 def _read_lines(path, encoding):
     try:
         with path.open("r", encoding=encoding, newline="") as handle:
-            yield from handle
+            for line in handle:
+                yield line
     except (OSError, UnicodeError) as exc:
         raise SearchError(f"Unable to read {path}: {exc}") from exc
 
@@ -53,8 +65,12 @@ def find_text(path, text, encoding="utf-8"):
         raise TypeError("text must be a string")
     encoding = _validate_encoding(encoding)
     results = []
-    for item in ensure_folder(path).rglob("*"):
-        if not item.is_file():
+    for item in _walk(path):
+        try:
+            is_file = item.is_file()
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
+        if not is_file:
             continue
         if any(text in line for line in _read_lines(item, encoding)):
             results.append(item)
@@ -75,8 +91,12 @@ def find_pattern(path, pattern, encoding="utf-8"):
     except re.error as exc:
         raise InvalidPatternError(str(exc)) from exc
     results = []
-    for item in ensure_folder(path).rglob("*"):
-        if not item.is_file():
+    for item in _walk(path):
+        try:
+            is_file = item.is_file()
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
+        if not is_file:
             continue
         if any(regex.search(line) for line in _read_lines(item, encoding)):
             results.append(item)
@@ -93,7 +113,7 @@ def find_by_extension(path, extension):
         raise InvalidExtensionError("Extension is required.")
     return _sorted_paths(
         item
-        for item in ensure_folder(path).rglob("*")
+        for item in _walk(path)
         if item.is_file() and item.suffix.casefold() == extension.casefold()
     )
 
@@ -113,7 +133,7 @@ def find_by_size(path, minimum=None, maximum=None):
     if minimum is not None and maximum is not None and minimum > maximum:
         raise ValueError("minimum cannot be greater than maximum")
     results = []
-    for item in ensure_folder(path).rglob("*"):
+    for item in _walk(path):
         if not item.is_file():
             continue
         try:
