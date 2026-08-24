@@ -24,8 +24,9 @@ def directory_tree(path, max_depth=None):
     def walk(folder, prefix, depth):
         if max_depth is not None and depth >= max_depth:
             return
-        for i, child in enumerate(_children(folder)):
-            last = i == len(_children(folder)) - 1
+        children = _children(folder)
+        for i, child in enumerate(children):
+            last = i == len(children) - 1
             lines.append(prefix + ("└── " if last else "├── ") + child.name)
             try:
                 is_dir = child.is_dir()
