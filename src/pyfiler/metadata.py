@@ -40,7 +40,7 @@ def metadata(path):
     p,st=_stat(path); mode=st.st_mode; isfile=stat.S_ISREG(mode); isfolder=stat.S_ISDIR(mode)
     try: empty=(next(iter(p.iterdir()),None) is None) if isfolder else (st.st_size==0 if isfile else False)
     except OSError as exc: raise MetadataUnavailableError(str(p)) from exc
-    return {"name":p.name,"path":str(p.resolve(strict=False)),"type":"file" if isfile else "folder" if isfolder else "other","size":st.st_size,"extension":p.suffix if isfile else "","created":st.st_ctime,"modified":st.st_mtime,"accessed":st.st_atime,"mode":stat.S_IMODE(mode),"is_file":isfile,"is_folder":isfolder,"is_empty":empty,"is_symlink":p.is_symlink()}
+    return {"name":p.name,"path":str(p.resolve(strict=False)),"type":"file" if isfile else "folder" if isfolder else "other","size":st.st_size,"extension":p.suffix if isfile else "","created":st.st_ctime,"modified":st.st_mtime,"accessed":st.st_atime,"mode":stat.S_IMODE(mode),"is_file":isfile,"is_folder":isfolder,"is_empty":empty,"is_symlink":p.is_symlink(),"device":st.st_dev,"inode":st.st_ino,"nlink":st.st_nlink}
 def permissions(path): return stat.S_IMODE(_stat(path)[1].st_mode)
 def name_of(path): return _stat(path)[0].name
 def stem_of(path): return _stat(path)[0].stem
@@ -61,4 +61,7 @@ def inode(path): return _stat(path)[1].st_ino
 def mode(path): return stat.S_IMODE(_stat(path)[1].st_mode)
 def nlink(path): return _stat(path)[1].st_nlink
 def same_filesystem(first,second): return device_id(first)==device_id(second)
+def same_object(first,second):
+    a,sa=_stat(first); b,sb=_stat(second)
+    return (sa.st_dev,sa.st_ino)==(sb.st_dev,sb.st_ino)
 file_size=size_of; file_extension=extension_of; file_name=name_of; file_stem=stem_of
