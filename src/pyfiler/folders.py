@@ -11,24 +11,40 @@ def create_folder(name, contents=None, trajectory=None):
     try:
         path.mkdir(parents=True)
         if contents is not None:
-            if isinstance(contents, str):
-                from .files import create_file
-                create_file(path / contents)
-            elif isinstance(contents, (list, tuple)):
-                for child in contents:
-                    if not hasattr(child, "name"):
-                        raise ContentTypeError("contents must contain filesystem objects or names.")
-                    source = to_path(child)
-                    destination = path / source.name
-                    if source.is_file(): shutil.copy2(source, destination)
-                    elif source.is_dir(): shutil.copytree(source, destination)
-            else:
-                raise ContentTypeError("contents must be a string, sequence, or None.")
+            children = [contents] if not isinstance(contents, (list, tuple)) else contents
+            for child in children:
+                source = to_path(child)
+                if not source.exists():
+                    raise PathNotFoundError(str(source))
+                destination = path / source.name
+                if destination.exists():
+                    raise DestinationExistsError(str(destination))
+                if source.is_file():
+                    shutil.copy2(source, destination)
+                elif source.is_dir():
+                    shutil.copytree(source, destination)
     except PyFilerError:
         raise
     except OSError as exc:
         raise FolderCreateError(str(path)) from exc
     return path
+
+
+def add_parent(child, parent):
+    """Move a file or folder created elsewhere into a parent folder."""
+    source = to_path(child)
+    destination_folder = ensure_folder(parent)
+    if not source.exists():
+        raise PathNotFoundError(str(source))
+    destination = destination_folder / source.name
+    if source.resolve() == destination.resolve():
+        raise SourceEqualsDestinationError(str(source))
+    if destination.exists():
+        raise DestinationExistsError(str(destination))
+    try:
+        return to_path(shutil.move(str(source), str(destination)))
+    except OSError as exc:
+        raise OperationError(str(source)) from exc
 
 
 def folder_contents(trajectory):
