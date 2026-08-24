@@ -5,7 +5,8 @@ from .utils import to_path, ensure_file, validate_lines, validate_contents
 from .exceptions import *
 
 
-def get_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
+def read_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
+    """Read a file, optionally returning only selected 1-based line numbers."""
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
         text = path.read_text(encoding=encoding)
@@ -23,7 +24,8 @@ def get_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
     return "".join(result)
 
 
-def add_contents(name, contents, trajectory=None, encoding="utf-8"):
+def append_contents(name, contents, trajectory=None, encoding="utf-8"):
+    """Append text to an existing file."""
     validate_contents(contents)
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
@@ -35,9 +37,10 @@ def add_contents(name, contents, trajectory=None, encoding="utf-8"):
 
 
 def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
+    """Remove selected lines, or clear the entire file when line_num is omitted."""
     path = ensure_file(trajectory if trajectory is not None else name)
     if line_num is None:
-        return edit_contents(name, "", trajectory, encoding)
+        return replace_contents(name, "", trajectory, encoding)
     validate_lines(line_num)
     try:
         lines = path.read_text(encoding=encoding).splitlines(keepends=True)
@@ -53,7 +56,8 @@ def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
     return path
 
 
-def edit_contents(name, contents, trajectory=None, encoding="utf-8"):
+def replace_contents(name, contents, trajectory=None, encoding="utf-8"):
+    """Replace the entire contents of an existing file."""
     validate_contents(contents)
     path = to_path(trajectory if trajectory is not None else name)
     if not path.exists():
@@ -68,6 +72,7 @@ def edit_contents(name, contents, trajectory=None, encoding="utf-8"):
 
 
 def create_file(name, contents="", trajectory=None, encoding="utf-8"):
+    """Create a new file, optionally with initial text."""
     validate_contents(contents)
     path = to_path(trajectory if trajectory is not None else name)
     if path.exists():
@@ -81,6 +86,7 @@ def create_file(name, contents="", trajectory=None, encoding="utf-8"):
 
 
 def delete_file(name, trajectory=None):
+    """Delete an existing file."""
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
         path.unlink()
@@ -90,6 +96,7 @@ def delete_file(name, trajectory=None):
 
 
 def copy_file(source, destination, overwrite=False):
+    """Copy a file to a destination."""
     src, dst = ensure_file(source), to_path(destination)
     if src.resolve() == dst.resolve():
         raise SourceEqualsDestinationError(str(src))
@@ -104,6 +111,7 @@ def copy_file(source, destination, overwrite=False):
 
 
 def move_file(source, destination, overwrite=False):
+    """Move a file to a destination."""
     src, dst = ensure_file(source), to_path(destination)
     if src.resolve() == dst.resolve():
         raise SourceEqualsDestinationError(str(src))
@@ -120,6 +128,7 @@ def move_file(source, destination, overwrite=False):
 
 
 def rename_file(name, new_name):
+    """Rename a file within its current directory."""
     src = ensure_file(name)
     if not isinstance(new_name, str) or not new_name.strip() or new_name in {".", ".."}:
         raise InvalidPathError("new_name must be a non-empty filename")
@@ -153,21 +162,15 @@ def file_exists(name, trajectory=None):
     return path.is_file()
 
 
-def read_file(name, line_num=None, trajectory=None, encoding="utf-8"):
-    """Compatibility alias for get_contents."""
-    return get_contents(name, line_num, trajectory, encoding)
-
-
-def write_file(name, contents, trajectory=None, encoding="utf-8"):
-    """Compatibility alias for edit_contents."""
-    return edit_contents(name, contents, trajectory, encoding)
-
-
-def append_file(name, contents, trajectory=None, encoding="utf-8"):
-    """Compatibility alias for add_contents."""
-    return add_contents(name, contents, trajectory, encoding)
+# Backwards-compatible aliases. New code should use the clearer names above.
+get_contents = read_contents
+add_contents = append_contents
+edit_contents = replace_contents
+read_file = read_contents
+write_file = replace_contents
+append_file = append_contents
 
 
 def clear_file(name, trajectory=None, encoding="utf-8"):
     """Remove all text from an existing file."""
-    return edit_contents(name, "", trajectory, encoding)
+    return replace_contents(name, "", trajectory, encoding)
