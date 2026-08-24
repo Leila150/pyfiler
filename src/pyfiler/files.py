@@ -1,12 +1,12 @@
 """File creation, reading, editing, copying and deletion."""
 from pathlib import Path
+import os
 import shutil
 from .utils import to_path, ensure_file, validate_lines, validate_contents
 from .exceptions import *
 
 
 def read_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
-    """Read a file, optionally returning only selected 1-based line numbers."""
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
         text = path.read_text(encoding=encoding)
@@ -25,7 +25,6 @@ def read_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
 
 
 def append_contents(name, contents, trajectory=None, encoding="utf-8"):
-    """Append text to an existing file."""
     validate_contents(contents)
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
@@ -37,16 +36,17 @@ def append_contents(name, contents, trajectory=None, encoding="utf-8"):
 
 
 def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
-    """Remove selected lines, or clear the entire file when line_num is omitted."""
     path = ensure_file(trajectory if trajectory is not None else name)
     if line_num is None:
         return replace_contents(name, "", trajectory, encoding)
     validate_lines(line_num)
     try:
         lines = path.read_text(encoding=encoding).splitlines(keepends=True)
-        for number in sorted(set(line_num), reverse=True):
+        requested = sorted(set(line_num), reverse=True)
+        for number in requested:
             if number > len(lines):
                 raise LineOutOfRangeError(f"Line {number} does not exist in {path}.")
+        for number in requested:
             del lines[number - 1]
         path.write_text("".join(lines), encoding=encoding)
     except LineOutOfRangeError:
@@ -57,7 +57,6 @@ def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
 
 
 def replace_contents(name, contents, trajectory=None, encoding="utf-8"):
-    """Replace the entire contents of an existing file."""
     validate_contents(contents)
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
@@ -68,7 +67,6 @@ def replace_contents(name, contents, trajectory=None, encoding="utf-8"):
 
 
 def create_file(name, contents="", trajectory=None, encoding="utf-8"):
-    """Create a new file, optionally with initial text."""
     validate_contents(contents)
     path = to_path(trajectory if trajectory is not None else name)
     if path.exists():
@@ -82,7 +80,6 @@ def create_file(name, contents="", trajectory=None, encoding="utf-8"):
 
 
 def delete_file(name, trajectory=None):
-    """Delete an existing file."""
     path = ensure_file(trajectory if trajectory is not None else name)
     try:
         path.unlink()
@@ -92,7 +89,6 @@ def delete_file(name, trajectory=None):
 
 
 def copy_file(source, destination, overwrite=False):
-    """Copy a file to a destination."""
     src, dst = ensure_file(source), to_path(destination)
     if src.resolve() == dst.resolve():
         raise SourceEqualsDestinationError(str(src))
@@ -109,7 +105,6 @@ def copy_file(source, destination, overwrite=False):
 
 
 def move_file(source, destination, overwrite=False):
-    """Move a file to a destination."""
     src, dst = ensure_file(source), to_path(destination)
     if src.resolve() == dst.resolve():
         raise SourceEqualsDestinationError(str(src))
@@ -117,18 +112,31 @@ def move_file(source, destination, overwrite=False):
         raise DestinationExistsError(str(dst))
     if dst.exists() and not dst.is_file():
         raise NotAFileError(str(dst))
+
+    backup = None
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if overwrite and dst.exists():
-            dst.unlink()
+            backup = dst.with_name(dst.name + ".pyfiler-backup")
+            counter = 1
+            while backup.exists():
+                backup = dst.with_name(f"{dst.name}.pyfiler-backup-{counter}")
+                counter += 1
+            dst.rename(backup)
         shutil.move(str(src), str(dst))
+        if backup is not None:
+            backup.unlink(missing_ok=True)
     except OSError as exc:
+        if backup is not None and backup.exists() and not dst.exists():
+            try:
+                backup.rename(dst)
+            except OSError:
+                pass
         raise FileMoveError(str(src)) from exc
     return dst
 
 
 def rename_file(name, new_name):
-    """Rename a file within its current directory."""
     src = ensure_file(name)
     if not isinstance(new_name, str) or not new_name.strip() or new_name in {".", ".."}:
         raise InvalidPathError("new_name must be a non-empty filename")
@@ -144,7 +152,6 @@ def rename_file(name, new_name):
 
 
 def touch_file(name, trajectory=None):
-    """Create an empty file or update its modification time."""
     path = to_path(trajectory if trajectory is not None else name)
     if path.exists() and not path.is_file():
         raise NotAFileError(str(path))
@@ -157,12 +164,10 @@ def touch_file(name, trajectory=None):
 
 
 def file_exists(name, trajectory=None):
-    """Return whether the resolved path exists and is a file."""
     path = to_path(trajectory if trajectory is not None else name)
     return path.is_file()
 
 
-# Backwards-compatible aliases. New code should use the clearer names above.
 get_contents = read_contents
 add_contents = append_contents
 edit_contents = replace_contents
@@ -172,5 +177,4 @@ append_file = append_contents
 
 
 def clear_file(name, trajectory=None, encoding="utf-8"):
-    """Remove all text from an existing file."""
     return replace_contents(name, "", trajectory, encoding)
