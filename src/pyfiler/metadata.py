@@ -1,27 +1,61 @@
 """Filesystem metadata helpers."""
-from .utils import to_path
+from __future__ import annotations
+
 from .exceptions import PathNotFoundError
+from .utils import to_path
 
 
-def exists(path): return to_path(path).exists()
-def is_file(path): return to_path(path).is_file()
-def is_folder(path): return to_path(path).is_dir()
-def is_empty(path):
+def _existing(path):
     p = to_path(path)
     if not p.exists():
         raise PathNotFoundError(str(p))
-    return not any(p.iterdir()) if p.is_dir() else p.stat().st_size == 0
+    return p
 
-def size_of(path): return to_path(path).stat().st_size
-def extension_of(path): return to_path(path).suffix
-def created_at(path): return to_path(path).stat().st_ctime
-def modified_at(path): return to_path(path).stat().st_mtime
-def accessed_at(path): return to_path(path).stat().st_atime
+
+def exists(path):
+    return to_path(path).exists()
+
+
+def is_file(path):
+    return to_path(path).is_file()
+
+
+def is_folder(path):
+    return to_path(path).is_dir()
+
+
+def is_empty(path):
+    p = _existing(path)
+    if p.is_dir():
+        return not any(p.iterdir())
+    if p.is_file():
+        return p.stat().st_size == 0
+    return False
+
+
+def size_of(path):
+    return _existing(path).stat().st_size
+
+
+def extension_of(path):
+    p = _existing(path)
+    return p.suffix if p.is_file() else ""
+
+
+def created_at(path):
+    return _existing(path).stat().st_ctime
+
+
+def modified_at(path):
+    return _existing(path).stat().st_mtime
+
+
+def accessed_at(path):
+    return _existing(path).stat().st_atime
+
 
 def metadata(path):
-    p = to_path(path)
-    if not p.exists():
-        raise PathNotFoundError(str(p))
+    p = _existing(path)
     stat = p.stat()
     isfile = p.is_file()
     isfolder = p.is_dir()
@@ -36,22 +70,37 @@ def metadata(path):
         "accessed": stat.st_atime,
         "is_file": isfile,
         "is_folder": isfolder,
-        "is_empty": not any(p.iterdir()) if isfolder else stat.st_size == 0 if isfile else False,
+        "is_empty": (not any(p.iterdir())) if isfolder else (stat.st_size == 0 if isfile else False),
     }
 
-def permissions(path): return to_path(path).stat().st_mode
-def name_of(path): return to_path(path).name
-def stem_of(path): return to_path(path).stem
+
+def permissions(path):
+    return _existing(path).stat().st_mode
+
+
+def name_of(path):
+    return _existing(path).name
+
+
+def stem_of(path):
+    return _existing(path).stem
+
 
 def path_kind(path):
     p = to_path(path)
-    if p.is_file(): return "file"
-    if p.is_dir(): return "folder"
-    if p.exists(): return "other"
+    if p.is_file():
+        return "file"
+    if p.is_dir():
+        return "folder"
+    if p.exists():
+        return "other"
     return "missing"
 
+
 def same_type(first, second):
-    return path_kind(first) == path_kind(second) and path_kind(first) in {"file", "folder"}
+    first_kind = path_kind(first)
+    second_kind = path_kind(second)
+    return first_kind == second_kind and first_kind in {"file", "folder"}
 
 
 # Backwards-compatible aliases.
