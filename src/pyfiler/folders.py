@@ -8,29 +8,57 @@ from .exceptions import *
 
 
 def create_folder(name, contents=None, trajectory=None):
+    """Create a folder and optionally copy files/folders into it.
+
+    The operation rolls back the newly-created folder if copying a requested
+    child fails, avoiding partially-created results.
+    """
     path = to_path(trajectory if trajectory is not None else name)
     if path.exists():
         raise FolderExistsError(str(path))
+
+    children = [] if contents is None else (
+        list(contents) if isinstance(contents, (list, tuple)) else [contents]
+    )
+    sources = []
+    for child in children:
+        source = to_path(child)
+        if not source.exists():
+            raise PathNotFoundError(str(source))
+        if source.resolve() == path.resolve():
+            raise SourceEqualsDestinationError(str(source))
+        if source.is_dir():
+            try:
+                path.resolve().relative_to(source.resolve())
+            except ValueError:
+                pass
+            else:
+                raise RecursiveOperationError(
+                    f"Cannot copy {source} into its own descendant {path}."
+                )
+        sources.append(source)
+
     try:
         path.mkdir(parents=True)
-        if contents is not None:
-            children = [contents] if not isinstance(contents, (list, tuple)) else list(contents)
-            for child in children:
-                source = to_path(child)
-                if not source.exists():
-                    raise PathNotFoundError(str(source))
-                destination = path / source.name
-                if destination.exists():
-                    raise DestinationExistsError(str(destination))
-                if source.resolve() == path.resolve():
-                    raise SourceEqualsDestinationError(str(source))
-                if source.is_file():
-                    shutil.copy2(source, destination)
-                elif source.is_dir():
-                    shutil.copytree(source, destination)
+        for source in sources:
+            destination = path / source.name
+            if destination.exists():
+                raise DestinationExistsError(str(destination))
+            if source.is_file():
+                shutil.copy2(source, destination)
+            elif source.is_dir():
+                shutil.copytree(source, destination)
     except PyFilerError:
+        try:
+            shutil.rmtree(path)
+        except OSError:
+            pass
         raise
     except OSError as exc:
+        try:
+            shutil.rmtree(path)
+        except OSError:
+            pass
         raise FolderCreateError(str(path)) from exc
     return path
 
@@ -128,11 +156,13 @@ def clear_folder(path):
 
 def copy_folder(source, destination, overwrite=False):
     src, dst = ensure_folder(source), to_path(destination)
-    if src.resolve() == dst.resolve():
+    src_resolved, dst_resolved = src.resolve(), dst.resolve()
+    if src_resolved == dst_resolved:
         raise SourceEqualsDestinationError(str(src))
     if dst.exists() and not overwrite:
         raise DestinationExistsError(str(dst))
     try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst, dirs_exist_ok=overwrite)
     except OSError as exc:
         raise FolderCopyError(str(src)) from exc
@@ -140,6 +170,7 @@ def copy_folder(source, destination, overwrite=False):
 
 
 def move_folder(source, destination, overwrite=False):
+    """Move a folder, using a temporary backup for safer overwrite moves."""
     src, dst = ensure_folder(source), to_path(destination)
     src_resolved, dst_resolved = src.resolve(), dst.resolve()
     if src_resolved == dst_resolved:
@@ -154,11 +185,25 @@ def move_folder(source, destination, overwrite=False):
     else:
         raise RecursiveOperationError(f"Cannot move {src} into its own descendant {dst}.")
 
+    backup = None
     try:
         if overwrite and dst.exists():
-            shutil.rmtree(dst)
+            backup = dst.with_name(dst.name + ".pyfiler-backup")
+            counter = 1
+            while backup.exists():
+                backup = dst.with_name(f"{dst.name}.pyfiler-backup-{counter}")
+                counter += 1
+            dst.rename(backup)
+        dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
+        if backup is not None:
+            shutil.rmtree(backup)
     except OSError as exc:
+        if backup is not None and backup.exists() and not dst.exists():
+            try:
+                backup.rename(dst)
+            except OSError:
+                pass
         raise FolderMoveError(str(src)) from exc
     return dst
 
