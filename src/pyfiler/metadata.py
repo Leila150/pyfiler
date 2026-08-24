@@ -12,8 +12,8 @@ def is_empty(path):
         raise PathNotFoundError(str(p))
     return not any(p.iterdir()) if p.is_dir() else p.stat().st_size == 0
 
-def file_size(path): return to_path(path).stat().st_size
-def file_extension(path): return to_path(path).suffix
+def size_of(path): return to_path(path).stat().st_size
+def extension_of(path): return to_path(path).suffix
 def created_at(path): return to_path(path).stat().st_ctime
 def modified_at(path): return to_path(path).stat().st_mtime
 def accessed_at(path): return to_path(path).stat().st_atime
@@ -40,10 +40,8 @@ def metadata(path):
     }
 
 def permissions(path): return to_path(path).stat().st_mode
-
-def file_name(path): return to_path(path).name
-
-def file_stem(path): return to_path(path).stem
+def name_of(path): return to_path(path).name
+def stem_of(path): return to_path(path).stem
 
 def path_kind(path):
     p = to_path(path)
@@ -54,3 +52,10 @@ def path_kind(path):
 
 def same_type(first, second):
     return path_kind(first) == path_kind(second) and path_kind(first) in {"file", "folder"}
+
+
+# Backwards-compatible aliases.
+file_size = size_of
+file_extension = extension_of
+file_name = name_of
+file_stem = stem_of
