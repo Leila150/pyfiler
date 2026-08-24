@@ -20,14 +20,26 @@ def file_hash(path,algorithm="sha256",chunk_size=1024*1024):
     normalized=_normalize_algorithm(algorithm)
     if not isinstance(chunk_size,int) or isinstance(chunk_size,bool) or chunk_size<=0: raise ValueError("chunk_size must be a positive integer")
     try:
-        target=ensure_file(path); before=target.stat(); digest=hashlib.new(normalized)
+        target=ensure_file(path); before=target.stat()
+        if before.st_size<0: raise HashingError(str(path))
+        digest=hashlib.new(normalized)
         with target.open("rb") as file:
-            for chunk in iter(lambda:file.read(chunk_size),b""): digest.update(chunk)
-        after=target.stat(); signature=lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns)
+            while True:
+                chunk=file.read(chunk_size)
+                if not chunk: break
+                digest.update(chunk)
+        after=target.stat()
+        signature=lambda st:(st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns)
         if signature(before)!=signature(after): raise ConcurrentModificationError("File changed while it was being hashed.")
         return digest.hexdigest()
-    except (UnsupportedHashAlgorithmError,ConcurrentModificationError): raise
+    except (UnsupportedHashAlgorithmError,ConcurrentModificationError,HashingError): raise
     except OSError as exc: raise HashingError(str(path)) from exc
+
+def hash_bytes(data,algorithm="sha256"):
+    if not isinstance(data,(bytes,bytearray,memoryview)): raise TypeError("data must be bytes-like")
+    try: digest=hashlib.new(_normalize_algorithm(algorithm)); digest.update(data); return digest.hexdigest()
+    except UnsupportedHashAlgorithmError: raise
+    except (TypeError,ValueError) as exc: raise HashingError(str(exc)) from exc
 
 available_hash_algorithms=hash_algorithms
 hash_file=file_hash
