@@ -1,7 +1,9 @@
 """Folder creation, inspection and organization."""
 from __future__ import annotations
 
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
 from .utils import to_path, ensure_folder
@@ -58,16 +60,12 @@ def create_folder(name, contents=None, trajectory=None):
             else:
                 shutil.copytree(source, destination)
     except PyFilerError:
-        try:
-            shutil.rmtree(path)
-        except OSError:
-            pass
+        try: shutil.rmtree(path)
+        except OSError: pass
         raise
     except OSError as exc:
-        try:
-            shutil.rmtree(path)
-        except OSError:
-            pass
+        try: shutil.rmtree(path)
+        except OSError: pass
         raise FolderCreateError(str(path)) from exc
     return path
 
@@ -118,10 +116,8 @@ def remove_from_folder(path, children):
     removed = []
     for target in targets:
         try:
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
+            if target.is_dir(): shutil.rmtree(target)
+            else: target.unlink()
         except OSError as exc:
             raise FolderDeleteError(str(target)) from exc
         removed.append(target)
@@ -135,23 +131,16 @@ def delete_folder(path, recursive=False):
     try:
         if any(folder.iterdir()) and not recursive:
             raise FolderNotEmptyError(str(folder))
-        if recursive:
-            shutil.rmtree(folder)
-        else:
-            folder.rmdir()
-    except FolderNotEmptyError:
-        raise
-    except OSError as exc:
-        raise FolderDeleteError(str(folder)) from exc
+        if recursive: shutil.rmtree(folder)
+        else: folder.rmdir()
+    except FolderNotEmptyError: raise
+    except OSError as exc: raise FolderDeleteError(str(folder)) from exc
     return True
 
 
-def list_files(path):
-    return [p for p in list_folder(path) if p.is_file()]
+def list_files(path): return [p for p in list_folder(path) if p.is_file()]
 
-
-def list_folders(path):
-    return [p for p in list_folder(path) if p.is_dir()]
+def list_folders(path): return [p for p in list_folder(path) if p.is_dir()]
 
 
 def clear_folder(path):
@@ -160,23 +149,49 @@ def clear_folder(path):
     return remove_from_folder(folder, children) if children else []
 
 
+def _temporary_destination(parent, prefix):
+    handle = tempfile.NamedTemporaryFile(dir=parent, prefix=prefix, suffix=".pyfiler-backup", delete=False)
+    candidate = Path(handle.name)
+    handle.close()
+    candidate.unlink(missing_ok=True)
+    return candidate
+
+
 def copy_folder(source, destination, overwrite=False):
     _validate_overwrite(overwrite)
     src, dst = ensure_folder(source), to_path(destination)
     sr, dr = src.resolve(), dst.resolve()
-    if sr == dr:
-        raise SourceEqualsDestinationError(str(src))
-    if dr.is_relative_to(sr):
-        raise RecursiveOperationError(f"Cannot copy {src} into its own descendant {dst}.")
-    if dst.exists() and not overwrite:
-        raise DestinationExistsError(str(dst))
-    if dst.exists() and not dst.is_dir():
-        raise NotAFolderError(str(dst))
+    if sr == dr: raise SourceEqualsDestinationError(str(src))
+    if dr.is_relative_to(sr): raise RecursiveOperationError(f"Cannot copy {src} into its own descendant {dst}.")
+    if dst.exists() and not overwrite: raise DestinationExistsError(str(dst))
+    if dst.exists() and not dst.is_dir(): raise NotAFolderError(str(dst))
+    temporary = None
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dst, dirs_exist_ok=overwrite)
-    except OSError as exc:
-        raise FolderCopyError(str(src)) from exc
+        # Build the complete copy beside the destination first. This prevents a
+        # failed copy from leaving a partially merged destination.
+        temporary = _temporary_destination(dst.parent, f".{dst.name}.")
+        shutil.copytree(src, temporary)
+        if dst.exists():
+            if not overwrite: raise DestinationExistsError(str(dst))
+            backup = _temporary_destination(dst.parent, f".{dst.name}.")
+            dst.rename(backup)
+            try:
+                temporary.rename(dst)
+            except OSError:
+                try: backup.rename(dst)
+                except OSError: pass
+                raise
+            shutil.rmtree(backup)
+        else:
+            temporary.rename(dst)
+        temporary = None
+    except DestinationExistsError: raise
+    except OSError as exc: raise FolderCopyError(str(src)) from exc
+    finally:
+        if temporary is not None:
+            try: shutil.rmtree(temporary)
+            except OSError: pass
     return dst
 
 
@@ -184,33 +199,22 @@ def move_folder(source, destination, overwrite=False):
     _validate_overwrite(overwrite)
     src, dst = ensure_folder(source), to_path(destination)
     sr, dr = src.resolve(), dst.resolve()
-    if sr == dr:
-        raise SourceEqualsDestinationError(str(src))
-    if dst.exists() and not overwrite:
-        raise DestinationExistsError(str(dst))
-    if dst.exists() and not dst.is_dir():
-        raise NotAFolderError(str(dst))
-    if dr.is_relative_to(sr):
-        raise RecursiveOperationError(f"Cannot move {src} into its own descendant {dst}.")
+    if sr == dr: raise SourceEqualsDestinationError(str(src))
+    if dst.exists() and not overwrite: raise DestinationExistsError(str(dst))
+    if dst.exists() and not dst.is_dir(): raise NotAFolderError(str(dst))
+    if dr.is_relative_to(sr): raise RecursiveOperationError(f"Cannot move {src} into its own descendant {dst}.")
     backup = None
     try:
         if overwrite and dst.exists():
-            backup = dst.with_name(dst.name + ".pyfiler-backup")
-            counter = 1
-            while backup.exists():
-                backup = dst.with_name(f"{dst.name}.pyfiler-backup-{counter}")
-                counter += 1
+            backup = _temporary_destination(dst.parent, f".{dst.name}.")
             dst.rename(backup)
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dst))
-        if backup is not None:
-            shutil.rmtree(backup)
+        if backup is not None: shutil.rmtree(backup)
     except OSError as exc:
         if backup is not None and backup.exists() and not dst.exists():
-            try:
-                backup.rename(dst)
-            except OSError:
-                pass
+            try: backup.rename(dst)
+            except OSError: pass
         raise FolderMoveError(str(src)) from exc
     return dst
 
@@ -219,12 +223,9 @@ def rename_folder(path, new_name):
     src = ensure_folder(path)
     _direct_child_name(new_name)
     dst = src.with_name(new_name)
-    if dst.exists():
-        raise DestinationExistsError(str(dst))
-    try:
-        return src.rename(dst)
-    except OSError as exc:
-        raise FolderRenameError(str(src)) from exc
+    if dst.exists(): raise DestinationExistsError(str(dst))
+    try: return src.rename(dst)
+    except OSError as exc: raise FolderRenameError(str(src)) from exc
 
 
 add_parent = move_into
