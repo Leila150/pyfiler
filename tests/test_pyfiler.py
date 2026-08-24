@@ -16,8 +16,8 @@ class PyFilerTests(unittest.TestCase):
     def check(self, name, fn):
         try:
             fn()
-        except Exception:
-            print(f"[FAIL] {name}")
+        except Exception as exc:
+            print(f"[FAIL] {name}\n       {type(exc).__name__}: {exc}")
             raise
         else:
             print(f"[PASS] {name}")
@@ -26,18 +26,15 @@ class PyFilerTests(unittest.TestCase):
         def run():
             path = self.root / "test.txt"
             pyfiler.create_file(path, "one\ntwo\nthree\n")
-            self.assertEqual(pyfiler.get_contents(path), "one\ntwo\nthree\n")
-            self.assertEqual(pyfiler.get_contents(path, [2]), "two\n")
-            pyfiler.add_contents(path, "four\n")
+            self.assertEqual(pyfiler.read_contents(path), "one\ntwo\nthree\n")
+            self.assertEqual(pyfiler.read_contents(path, [2]), "two\n")
+            pyfiler.append_contents(path, "four\n")
             pyfiler.remove_contents(path, [2])
-            self.assertNotIn("two", pyfiler.get_contents(path))
-            pyfiler.edit_contents(path, "done")
-            self.assertEqual(pyfiler.read_file(path), "done")
-            pyfiler.write_file(path, "rewritten")
-            pyfiler.append_file(path, "!")
-            self.assertEqual(pyfiler.get_contents(path), "rewritten!")
+            self.assertNotIn("two", pyfiler.read_contents(path))
+            pyfiler.replace_contents(path, "done")
+            self.assertEqual(pyfiler.read_contents(path), "done")
             pyfiler.clear_file(path)
-            self.assertEqual(pyfiler.get_contents(path), "")
+            self.assertEqual(pyfiler.read_contents(path), "")
             pyfiler.touch_file(path)
             self.assertTrue(pyfiler.file_exists(path))
 
@@ -51,10 +48,10 @@ class PyFilerTests(unittest.TestCase):
             renamed = self.root / "renamed.txt"
             pyfiler.create_file(source, "hello")
             pyfiler.copy_file(source, copy)
-            self.assertTrue(pyfiler.compare_files(source, copy))
+            self.assertTrue(pyfiler.files_equal(source, copy))
             pyfiler.move_file(copy, moved)
             pyfiler.rename_file(moved, renamed.name)
-            self.assertEqual(pyfiler.get_contents(renamed), "hello")
+            self.assertEqual(pyfiler.read_contents(renamed), "hello")
             pyfiler.delete_file(renamed)
             self.assertFalse(renamed.exists())
 
@@ -64,11 +61,11 @@ class PyFilerTests(unittest.TestCase):
         def run():
             folder = pyfiler.create_folder(self.root / "folder")
             source = pyfiler.create_file(self.root / "child.txt", "hello")
-            pyfiler.add_parent(source, folder)
-            self.assertEqual(len(pyfiler.folder_contents(folder)), 1)
+            pyfiler.move_into(source, folder)
+            self.assertEqual(len(pyfiler.list_folder(folder)), 1)
             self.assertTrue(pyfiler.list_files(folder))
-            pyfiler.folder_remove_contents(folder, ["child.txt"])
-            self.assertEqual(pyfiler.folder_contents(folder), [])
+            pyfiler.remove_from_folder(folder, ["child.txt"])
+            self.assertEqual(pyfiler.list_folder(folder), [])
 
         self.check("folder operations", run)
 
@@ -80,12 +77,13 @@ class PyFilerTests(unittest.TestCase):
             pyfiler.create_folder(folder / "src")
             pyfiler.create_file(folder / "src" / "app.py", "def app(): pass")
             self.assertEqual(len(pyfiler.find_files(folder, "*.py")), 2)
-            self.assertEqual(len(pyfiler.find_extension(folder, ".py")), 2)
-            self.assertEqual(len(pyfiler.search_contents(folder, "hello")), 2)
-            self.assertEqual(len(pyfiler.search_regex(folder, r"def\\s+\\w+")), 1)
+            self.assertEqual(len(pyfiler.find_by_extension(folder, ".py")), 2)
+            self.assertEqual(len(pyfiler.find_text(folder, "hello")), 2)
+            self.assertEqual(len(pyfiler.find_pattern(folder, r"def\s+\w+")), 1)
+            self.assertEqual(len(pyfiler.find_pattern(folder, r"def\\s+\\w+")), 0)
             self.assertEqual(pyfiler.count_files(folder), 3)
             self.assertEqual(pyfiler.count_folders(folder), 1)
-            self.assertIn("main.py", pyfiler.tree(folder))
+            self.assertIn("main.py", pyfiler.directory_tree(folder))
 
         self.check("search and tree operations", run)
 
@@ -96,9 +94,9 @@ class PyFilerTests(unittest.TestCase):
             self.assertEqual(info["type"], "file")
             self.assertTrue(info["is_file"])
             self.assertFalse(info["is_folder"])
-            self.assertEqual(pyfiler.file_name(path), "hello.py")
-            self.assertEqual(pyfiler.file_stem(path), "hello")
-            self.assertEqual(pyfiler.file_extension(path), ".py")
+            self.assertEqual(pyfiler.name_of(path), "hello.py")
+            self.assertEqual(pyfiler.stem_of(path), "hello")
+            self.assertEqual(pyfiler.extension_of(path), ".py")
             self.assertEqual(pyfiler.path_kind(path), "file")
             self.assertTrue(pyfiler.exists(path))
             self.assertTrue(pyfiler.is_file(path))
@@ -109,9 +107,13 @@ class PyFilerTests(unittest.TestCase):
     def test_hashing(self):
         def run():
             path = pyfiler.create_file(self.root / "hash.txt", "hello")
-            digest = pyfiler.hash_file(path, "sha256")
+            digest = pyfiler.file_hash(path, "SHA-256")
             self.assertEqual(len(digest), 64)
-            self.assertIn("sha256", pyfiler.available_hash_algorithms())
+            self.assertIn("sha256", pyfiler.hash_algorithms())
+            with self.assertRaises(pyfiler.UnsupportedHashAlgorithmError):
+                pyfiler.file_hash(path, "definitely-not-a-hash")
+            with self.assertRaises(ValueError):
+                pyfiler.file_hash(path, "sha256", 0)
 
         self.check("hashing", run)
 
@@ -122,10 +124,11 @@ class PyFilerTests(unittest.TestCase):
             fs.create_file("src/main.py", "print('Hello')")
             self.assertTrue(fs.exists("src/main.py"))
             self.assertTrue(fs.is_file("src/main.py"))
-            self.assertEqual(fs.get_contents("src/main.py"), "print('Hello')")
+            self.assertEqual(fs.read_contents("src/main.py"), "print('Hello')")
             self.assertEqual(fs.metadata("src/main.py")["type"], "file")
-            fs.add_contents("src/main.py", "\nprint('Bye')")
-            self.assertIn("Bye", fs.get_contents("src/main.py"))
+            fs.append_contents("src/main.py", "\nprint('Bye')")
+            self.assertIn("Bye", fs.read_contents("src/main.py"))
+            self.assertEqual(fs.relative("src/main.py"), Path("src/main.py"))
 
             with self.assertRaises(pyfiler.PathOutsideRootError):
                 fs.create_file("../escape.txt", "blocked")
