@@ -1,4 +1,6 @@
 """High-level rooted filesystem interface."""
+from __future__ import annotations
+
 from .utils import to_path, safe_inside
 from .files import (
     read_contents, append_contents, remove_contents, replace_contents,
@@ -14,7 +16,14 @@ from .search import (
     find_paths, find_files, find_folders, find_text, find_pattern,
     find_by_extension, find_by_size,
 )
-from .metadata import metadata, exists, is_file, is_folder, is_empty
+from .metadata import (
+    metadata, exists, is_file, is_folder, is_empty, size_of,
+    name_of, stem_of, extension_of, path_kind, same_type,
+    permissions, created_at, modified_at, accessed_at,
+)
+from .hashing import file_hash, hash_algorithms
+from .comparison import files_equal
+from .tree import directory_tree, directory_size, count_files, count_folders, extension_counts
 from .exceptions import InvalidRootError, RootNotFoundError
 
 
@@ -27,13 +36,14 @@ class Explorer:
             raise InvalidRootError(str(self.root))
         if not self.root.exists():
             if create:
-                self.root.mkdir(parents=True)
+                self.root.mkdir(parents=True, exist_ok=True)
             else:
                 raise RootNotFoundError(str(self.root))
 
-    def _path(self, path):
+    def _path(self, path="."):
         value = to_path(path)
-        return safe_inside(value, self.root) if value.is_absolute() else safe_inside(self.root / value, self.root)
+        candidate = value if value.is_absolute() else self.root / value
+        return safe_inside(candidate, self.root)
 
     # Files
     def read_contents(self, name, line_num=None):
@@ -72,7 +82,6 @@ class Explorer:
     def clear_file(self, name):
         return clear_file(name, self._path(name))
 
-    # Backwards-compatible file aliases.
     get_contents = read_contents
     add_contents = append_contents
     edit_contents = replace_contents
@@ -114,7 +123,6 @@ class Explorer:
     def rename_folder(self, name, new_name):
         return rename_folder(self._path(name), new_name)
 
-    # Backwards-compatible folder aliases.
     add_parent = move_into
     folder_contents = list_folder
     folder_remove_contents = remove_from_folder
@@ -141,14 +149,13 @@ class Explorer:
     def find_by_size(self, name=".", minimum=None, maximum=None):
         return find_by_size(self._path(name), minimum, maximum)
 
-    # Backwards-compatible search aliases.
     find = find_paths
     search_contents = find_text
     search_regex = find_pattern
     find_extension = find_by_extension
 
     # Metadata
-    def exists(self, name):
+    def exists(self, name="."):
         return exists(self._path(name))
 
     def is_file(self, name):
@@ -162,6 +169,63 @@ class Explorer:
 
     def metadata(self, name):
         return metadata(self._path(name))
+
+    def size_of(self, name):
+        return size_of(self._path(name))
+
+    def name_of(self, name):
+        return name_of(self._path(name))
+
+    def stem_of(self, name):
+        return stem_of(self._path(name))
+
+    def extension_of(self, name):
+        return extension_of(self._path(name))
+
+    def path_kind(self, name):
+        return path_kind(self._path(name))
+
+    def same_type(self, first, second):
+        return same_type(self._path(first), self._path(second))
+
+    def permissions(self, name):
+        return permissions(self._path(name))
+
+    def created_at(self, name):
+        return created_at(self._path(name))
+
+    def modified_at(self, name):
+        return modified_at(self._path(name))
+
+    def accessed_at(self, name):
+        return accessed_at(self._path(name))
+
+    # Hashing / comparison
+    def file_hash(self, name, algorithm="sha256", chunk_size=1024 * 1024):
+        return file_hash(self._path(name), algorithm, chunk_size)
+
+    @staticmethod
+    def hash_algorithms():
+        return hash_algorithms()
+
+    def files_equal(self, first, second, shallow=False):
+        return files_equal(self._path(first), self._path(second), shallow)
+
+    # Tree / statistics
+    def directory_tree(self, name=".", max_depth=None):
+        return directory_tree(self._path(name), max_depth)
+
+    def directory_size(self, name="."):
+        return directory_size(self._path(name))
+
+    def count_files(self, name="."):
+        return count_files(self._path(name))
+
+    def count_folders(self, name="."):
+        return count_folders(self._path(name))
+
+    def extension_counts(self, name="."):
+        return extension_counts(self._path(name))
 
     def path(self, name="."):
         return self._path(name)
