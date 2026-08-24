@@ -9,7 +9,7 @@ from .hashing import file_hash, hash_algorithms
 from .comparison import files_equal
 from .tree import directory_tree, directory_size, count_files, count_folders, extension_counts
 from .paths import absolute_path, relative_path, parent_path, file_name, file_extension, file_stem, join_paths, normalize_path
-from .exceptions import InvalidRootError, RootNotFoundError
+from .exceptions import InvalidRootError, RootNotFoundError, PathOutsideRootError
 
 
 class Explorer:
@@ -101,11 +101,26 @@ class Explorer:
 
     def absolute_path(self, name="."): return absolute_path(self._path(name))
     def relative_path(self, name=".", start=None): return relative_path(self._path(name), self._path(start) if start is not None else self.root)
-    def parent_path(self, name="."): return parent_path(self._path(name))
+
+    def parent_path(self, name="."):
+        """Return the parent without ever exposing a path above the root."""
+        current = self._path(name)
+        if current == self.root: return "."
+        parent = current.parent
+        if parent == self.root or self.root in parent.parents: return str(parent)
+        raise PathOutsideRootError(f"Parent of {current} is outside {self.root}")
+
     def file_name(self, name): return file_name(self._path(name))
     def file_extension(self, name): return file_extension(self._path(name))
     def file_stem(self, name): return file_stem(self._path(name))
-    def join_paths(self, *parts): return join_paths(*parts)
+
+    def join_paths(self, *parts):
+        """Join relative components inside this Explorer's root."""
+        if not parts: return str(self.root)
+        for part in parts:
+            if to_path(part).is_absolute(): raise PathOutsideRootError("Explorer.join_paths accepts only relative components")
+        return str(self._path(join_paths(*parts)))
+
     def normalize_path(self, name="."): return normalize_path(self._path(name))
     def path(self, name="."): return self._path(name)
     def relative(self, name="."): return str(self._path(name).relative_to(self.root))
