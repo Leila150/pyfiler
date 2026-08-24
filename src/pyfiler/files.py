@@ -59,11 +59,7 @@ def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
 def replace_contents(name, contents, trajectory=None, encoding="utf-8"):
     """Replace the entire contents of an existing file."""
     validate_contents(contents)
-    path = to_path(trajectory if trajectory is not None else name)
-    if not path.exists():
-        raise PyFilerFileNotFoundError(str(path))
-    if not path.is_file():
-        raise NotAFileError(str(path))
+    path = ensure_file(trajectory if trajectory is not None else name)
     try:
         path.write_text(contents, encoding=encoding)
     except (OSError, UnicodeError) as exc:
@@ -102,6 +98,8 @@ def copy_file(source, destination, overwrite=False):
         raise SourceEqualsDestinationError(str(src))
     if dst.exists() and not overwrite:
         raise DestinationExistsError(str(dst))
+    if dst.exists() and not dst.is_file():
+        raise NotAFileError(str(dst))
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
@@ -117,6 +115,8 @@ def move_file(source, destination, overwrite=False):
         raise SourceEqualsDestinationError(str(src))
     if dst.exists() and not overwrite:
         raise DestinationExistsError(str(dst))
+    if dst.exists() and not dst.is_file():
+        raise NotAFileError(str(dst))
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if overwrite and dst.exists():
