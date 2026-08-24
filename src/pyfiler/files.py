@@ -1,4 +1,5 @@
 """File creation, reading, editing, copying and deletion."""
+from pathlib import Path
 import shutil
 from .utils import to_path, ensure_file, validate_lines, validate_contents
 from .exceptions import *
@@ -45,6 +46,8 @@ def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
                 raise LineOutOfRangeError(f"Line {number} does not exist in {path}.")
             del lines[number - 1]
         path.write_text("".join(lines), encoding=encoding)
+    except LineOutOfRangeError:
+        raise
     except (OSError, UnicodeError) as exc:
         raise FileWriteError(str(path)) from exc
     return path
@@ -118,6 +121,10 @@ def move_file(source, destination, overwrite=False):
 
 def rename_file(name, new_name):
     src = ensure_file(name)
+    if not isinstance(new_name, str) or not new_name.strip() or new_name in {".", ".."}:
+        raise InvalidPathError("new_name must be a non-empty filename")
+    if Path(new_name).name != new_name:
+        raise InvalidPathError("new_name must not contain directory separators")
     dst = src.with_name(new_name)
     if dst.exists():
         raise DestinationExistsError(str(dst))
@@ -125,3 +132,42 @@ def rename_file(name, new_name):
         return src.rename(dst)
     except OSError as exc:
         raise FileRenameError(str(src)) from exc
+
+
+def touch_file(name, trajectory=None):
+    """Create an empty file or update its modification time."""
+    path = to_path(trajectory if trajectory is not None else name)
+    if path.exists() and not path.is_file():
+        raise NotAFileError(str(path))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch(exist_ok=True)
+    except OSError as exc:
+        raise FileWriteError(str(path)) from exc
+    return path
+
+
+def file_exists(name, trajectory=None):
+    """Return whether the resolved path exists and is a file."""
+    path = to_path(trajectory if trajectory is not None else name)
+    return path.is_file()
+
+
+def read_file(name, line_num=None, trajectory=None, encoding="utf-8"):
+    """Compatibility alias for get_contents."""
+    return get_contents(name, line_num, trajectory, encoding)
+
+
+def write_file(name, contents, trajectory=None, encoding="utf-8"):
+    """Compatibility alias for edit_contents."""
+    return edit_contents(name, contents, trajectory, encoding)
+
+
+def append_file(name, contents, trajectory=None, encoding="utf-8"):
+    """Compatibility alias for add_contents."""
+    return add_contents(name, contents, trajectory, encoding)
+
+
+def clear_file(name, trajectory=None, encoding="utf-8"):
+    """Remove all text from an existing file."""
+    return edit_contents(name, "", trajectory, encoding)
