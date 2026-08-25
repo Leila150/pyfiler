@@ -25,6 +25,11 @@ class StorageStatus:
     filesystem: str
     platform: str
 
+    @property
+    def permission_granted(self):
+        """Whether the target is accessible through at least one storage permission."""
+        return self.available
+
 
 def _target(path=None):
     target=to_path(path) if path is not None else Path.cwd()
