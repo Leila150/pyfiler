@@ -25,29 +25,37 @@ class Explorer:
             if create: self.root.mkdir(parents=True,exist_ok=True)
             else: raise RootNotFoundError(str(self.root))
     def _path(self,path="."): return safe_inside(path,self.root,reject_symlinks=True)
+    def _source(self,path):
+        """Validate an Explorer source and require it to remain inside root."""
+        return self._path(path)
     def read_contents(self,name,line_num=None): return read_contents(name,line_num,self._path(name))
     def append_contents(self,name,contents): return append_contents(name,contents,self._path(name))
     def remove_contents(self,name,line_num=None): return remove_contents(name,line_num,self._path(name))
     def replace_contents(self,name,contents): return replace_contents(name,contents,self._path(name))
     def create_file(self,name,contents=""): return create_file(name,contents,self._path(name))
     def delete_file(self,name): return delete_file(name,self._path(name))
-    def copy_file(self,source,destination,overwrite=False): return copy_file(self._path(source),self._path(destination),overwrite)
-    def move_file(self,source,destination,overwrite=False): return move_file(self._path(source),self._path(destination),overwrite)
+    def copy_file(self,source,destination,overwrite=False): return copy_file(self._source(source),self._path(destination),overwrite)
+    def move_file(self,source,destination,overwrite=False): return move_file(self._source(source),self._path(destination),overwrite)
     def rename_file(self,name,new_name): return rename_file(self._path(name),new_name)
     def touch_file(self,name): return touch_file(name,self._path(name))
     def file_exists(self,name): return file_exists(name,self._path(name))
     def clear_file(self,name): return clear_file(name,self._path(name))
     get_contents=read_contents; add_contents=append_contents; edit_contents=replace_contents; read_file=read_contents; write_file=replace_contents; append_file=append_contents
-    def create_folder(self,name,contents=None): return create_folder(name,contents,self._path(name))
-    def move_into(self,child,parent): return move_into(self._path(child),self._path(parent))
+    def create_folder(self,name,contents=None):
+        destination=self._path(name)
+        if contents is None: return create_folder(name,None,destination)
+        sources=contents if isinstance(contents,(list,tuple)) else [contents]
+        validated=[self._source(source) for source in sources]
+        return create_folder(name,validated,destination)
+    def move_into(self,child,parent): return move_into(self._source(child),self._path(parent))
     def delete_folder(self,name,recursive=False): return delete_folder(self._path(name),recursive)
     def list_folder(self,name="."): return list_folder(self._path(name))
     def remove_from_folder(self,name,child): return remove_from_folder(self._path(name),child)
     def list_files(self,name="."): return list_files(self._path(name))
     def list_folders(self,name="."): return list_folders(self._path(name))
     def clear_folder(self,name="."): return clear_folder(self._path(name))
-    def copy_folder(self,source,destination,overwrite=False): return copy_folder(self._path(source),self._path(destination),overwrite)
-    def move_folder(self,source,destination,overwrite=False): return move_folder(self._path(source),self._path(destination),overwrite)
+    def copy_folder(self,source,destination,overwrite=False): return copy_folder(self._source(source),self._path(destination),overwrite)
+    def move_folder(self,source,destination,overwrite=False): return move_folder(self._source(source),self._path(destination),overwrite)
     def rename_folder(self,name,new_name): return rename_folder(self._path(name),new_name)
     add_parent=move_into; folder_contents=list_folder; folder_remove_contents=remove_from_folder
     def find_paths(self,name=".",pattern="*"): return find_paths(self._path(name),pattern)
