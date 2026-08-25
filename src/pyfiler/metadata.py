@@ -1,6 +1,8 @@
 """Filesystem metadata helpers."""
 from __future__ import annotations
+import os
 import stat
+import time
 from .exceptions import PathNotFoundError, MetadataUnavailableError
 from .utils import to_path
 
@@ -33,14 +35,18 @@ def is_empty(path):
 def size_of(path): return _stat(path)[1].st_size
 def extension_of(path):
     p,st=_stat(path); return p.suffix if stat.S_ISREG(st.st_mode) else ""
-def created_at(path): return _stat(path)[1].st_ctime
+def created_at(path):
+    p,st=_stat(path)
+    birth=getattr(st,"st_birthtime",None)
+    return birth if birth is not None else st.st_ctime
 def modified_at(path): return _stat(path)[1].st_mtime
 def accessed_at(path): return _stat(path)[1].st_atime
 def metadata(path):
     p,st=_stat(path); mode=st.st_mode; isfile=stat.S_ISREG(mode); isfolder=stat.S_ISDIR(mode)
     try: empty=(next(iter(p.iterdir()),None) is None) if isfolder else (st.st_size==0 if isfile else False)
     except OSError as exc: raise MetadataUnavailableError(str(p)) from exc
-    return {"name":p.name,"path":str(p.resolve(strict=False)),"type":"file" if isfile else "folder" if isfolder else "other","size":st.st_size,"extension":p.suffix if isfile else "","created":st.st_ctime,"modified":st.st_mtime,"accessed":st.st_atime,"mode":stat.S_IMODE(mode),"is_file":isfile,"is_folder":isfolder,"is_empty":empty,"is_symlink":p.is_symlink(),"device":st.st_dev,"inode":st.st_ino,"nlink":st.st_nlink}
+    birth=getattr(st,"st_birthtime",None)
+    return {"name":p.name,"path":str(p),"type":"file" if isfile else "folder" if isfolder else "other","size":st.st_size,"extension":p.suffix if isfile else "","created":birth if birth is not None else st.st_ctime,"modified":st.st_mtime,"accessed":st.st_atime,"mode":stat.S_IMODE(mode),"is_file":isfile,"is_folder":isfolder,"is_empty":empty,"is_symlink":p.is_symlink(),"device":st.st_dev,"inode":st.st_ino,"nlink":st.st_nlink}
 def permissions(path): return stat.S_IMODE(_stat(path)[1].st_mode)
 def name_of(path): return _stat(path)[0].name
 def stem_of(path): return _stat(path)[0].stem
