@@ -56,7 +56,7 @@ def executable(path=None):
 
 
 def write_test(path=None):
-    """Perform an actual temporary write without leaving a probe behind."""
+    """Perform an actual durable temporary write without leaving a probe behind."""
     target=_target(path)
     if not target.is_dir(): return False
     probe=None
@@ -92,21 +92,24 @@ def can_read(path=None): return readable(path)
 def can_execute(path=None): return executable(path)
 
 
+def _linux_filesystem(target):
+    try:
+        best=None
+        with open("/proc/mounts","r",encoding="utf-8") as mounts:
+            for line in mounts:
+                parts=line.split()
+                if len(parts)<3: continue
+                mount=parts[1].replace("\\040"," ").replace("\\011","\t").replace("\\134","\\")
+                mount_path=Path(mount)
+                if target==mount_path or mount_path in target.parents:
+                    if best is None or len(mount_path.parts)>len(best[0].parts): best=(mount_path,parts[2])
+        return best[1] if best else "unknown"
+    except (OSError,ValueError): return "unknown"
+
+
 def filesystem(path=None):
     target=_target(path)
-    system=platform.system().lower()
-    if system == "linux":
-        try:
-            best=None
-            with open("/proc/mounts","r",encoding="utf-8") as mounts:
-                for line in mounts:
-                    parts=line.split()
-                    if len(parts)<3: continue
-                    mount=parts[1].replace("\\040"," ").replace("\\011","\t")
-                    if str(target)==mount or str(target).startswith(mount.rstrip("/")+"/"):
-                        if best is None or len(mount)>len(best[0]): best=(mount,parts[2])
-            if best: return best[1]
-        except OSError: pass
+    if platform.system().lower()=="linux": return _linux_filesystem(target)
     return "unknown"
 
 
