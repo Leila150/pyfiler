@@ -1,31 +1,21 @@
-PYFILER PROPRIETARY SOFTWARE LICENSE
-Copyright (c) 2026 Leila150. All rights reserved.
+MIT License
 
-1. OWNERSHIP
-The pyfiler software, source code, documentation, examples, tests, and associated original materials (collectively, the “Software”) are protected by applicable copyright and other intellectual-property laws. All rights are reserved by Leila150 unless expressly stated otherwise.
+Copyright (c) 2026 Leila150
 
-2. NO LICENSE GRANTED
-Except for the limited right to view the public repository through GitHub’s normal website functionality, no license, permission, or other authorization is granted to use, copy, reproduce, modify, adapt, translate, merge, publish, distribute, sublicense, sell, rent, lease, or create derivative works from the Software.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-3. PROHIBITED ACTIONS
-Without prior written permission from the copyright holder, you may not:
-- copy or reproduce the Software or substantial portions of it;
-- modify, alter, adapt, or create derivative versions of the Software;
-- redistribute, republish, mirror, or re-upload the Software or substantial portions of it;
-- package or sell the Software or modified versions of it;
-- sublicense, transfer, or grant rights to the Software to another person or organization;
-- remove or alter copyright, ownership, attribution, or license notices.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-4. AUTHORIZED USE
-Any use beyond viewing the public repository requires explicit written permission from the copyright holder. Permission may be granted for specific purposes and may include additional conditions. Permission for one use does not imply permission for any other use.
-
-5. THIRD-PARTY MATERIALS
-This license applies only to material owned by Leila150. Third-party dependencies, trademarks, or separately licensed materials remain subject to their own licenses and terms.
-
-6. NO WARRANTY
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW.
-
-7. RESERVATION OF RIGHTS
-All rights not expressly granted in writing are reserved.
-
-For permission requests, contact the copyright holder through the official repository account associated with Leila150.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
