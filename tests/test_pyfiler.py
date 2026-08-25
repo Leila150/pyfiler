@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import pyfiler
+import pyfiler.storage_info as storage_info
 
 
 class PyFilerTests(unittest.TestCase):
@@ -135,22 +136,48 @@ class PyFilerTests(unittest.TestCase):
 
         self.check("rooted Explorer", run)
 
-    def test_storage(self):
+    def test_storage_info(self):
         def run():
-            storage = pyfiler.setup_storage(self.root)
-            self.assertTrue(storage.available)
-            self.assertTrue(storage.permission_granted)
-            self.assertEqual(Path(storage.path).resolve(), self.root.resolve())
+            self.assertTrue(storage_info.exists())
+            self.assertTrue(storage_info.available())
+            self.assertTrue(storage_info.readable())
+            self.assertTrue(storage_info.writable())
+            self.assertTrue(storage_info.can_read())
+            self.assertTrue(storage_info.can_write())
+            self.assertTrue(storage_info.permission_granted())
+            self.assertTrue(storage_info.write_test())
 
-        self.check("storage setup", run)
+            info = storage_info.check(self.root)
+            self.assertTrue(info.available)
+            self.assertTrue(info.permission_granted)
+            self.assertEqual(info.filesystem, storage_info.filesystem(self.root))
+            self.assertGreaterEqual(info.total_bytes, info.free_bytes)
+            self.assertGreaterEqual(info.used_bytes, 0)
+            self.assertTrue(storage_info.disk_usage(self.root).total >= storage_info.disk_usage(self.root).free)
+
+        self.check("storage information", run)
+
+    def test_storage_aliases_and_details(self):
+        def run():
+            self.assertEqual(storage_info.storage(), storage_info.available())
+            self.assertEqual(storage_info.status(), storage_info.available())
+            self.assertTrue(storage_info.home_directory().exists())
+            self.assertTrue(storage_info.current_directory().exists())
+            self.assertTrue(storage_info.temporary_directory().exists())
+            self.assertTrue(storage_info.platform_name())
+            self.assertTrue(storage_info.operating_system())
+            self.assertTrue(storage_info.default_storage().exists())
+            self.assertTrue(storage_info.path().exists())
+
+        self.check("storage information details", run)
 
 
 if __name__ == "__main__":
-    print("=" * 60)
+    print("=" * 70)
     print("PYFILER TEST SUITE")
-    print("=" * 60)
+    print("=" * 70)
     result = unittest.main(verbosity=2, exit=False)
-    print("=" * 60)
+    print("=" * 70)
     print("TEST SUITE COMPLETE")
-    print("=" * 60)
+    print("=" * 70)
     raise SystemExit(0 if result.result.wasSuccessful() else 1)
