@@ -1,6 +1,8 @@
 """Recursive file, folder, and content search."""
 from __future__ import annotations
+
 import re
+
 from .exceptions import InvalidExtensionError, InvalidPatternError, SearchError
 from .utils import ensure_folder
 
@@ -30,12 +32,7 @@ def _walk(path, pattern="*"):
 
 
 def find_paths(path, name="*"):
-    """Find files and folders recursively by name.
-
-    Glob patterns such as ``*.txt`` retain normal pathlib semantics. A plain
-    name is treated as a case-insensitive substring, which makes ``name='log'``
-    find ``app.log`` as well as a directory named ``logs``.
-    """
+    """Find files and folders recursively by name."""
     name = _validate_name(name)
     if any(char in name for char in "*?[]"):
         return list(_walk(path, name))
@@ -52,7 +49,8 @@ def find_files(path, name="*"):
     results = []
     for p in _walk(path, _validate_name(name)):
         try:
-            if p.is_file(): results.append(p)
+            if p.is_file() and not p.is_symlink():
+                results.append(p)
         except OSError as exc:
             raise SearchError(f"Unable to inspect {p}: {exc}") from exc
     return _sorted_paths(results)
@@ -62,7 +60,8 @@ def find_folders(path, name="*"):
     results = []
     for p in _walk(path, _validate_name(name)):
         try:
-            if p.is_dir(): results.append(p)
+            if p.is_dir() and not p.is_symlink():
+                results.append(p)
         except OSError as exc:
             raise SearchError(f"Unable to inspect {p}: {exc}") from exc
     return _sorted_paths(results)
@@ -80,10 +79,18 @@ def _validate_limit(value, name):
     return value
 
 
-def _read_lines(path, encoding, max_file_size, max_line_length=None):
+def _scan_file(path, encoding, max_file_size, predicate, max_line_length=None):
+    """Scan a file while always performing the post-scan consistency check.
+
+    The previous generator-based implementation could stop at the first match
+    and therefore skip its final stat check. This helper keeps streaming
+    behavior while guaranteeing the check runs even when a match is found.
+    """
     max_file_size = _validate_limit(max_file_size, "max_file_size")
     if max_line_length is not None:
         max_line_length = _validate_limit(max_line_length, "max_line_length")
+
+    initial = None
     try:
         initial = path.stat()
         if initial.st_size > max_file_size:
@@ -91,12 +98,31 @@ def _read_lines(path, encoding, max_file_size, max_line_length=None):
         with path.open("r", encoding=encoding, newline="") as handle:
             for line in handle:
                 if max_line_length is not None and len(line) > max_line_length:
-                    raise SearchError(f"Search line exceeds max_line_length: {path}")
-                yield line
+                    raise SearchError(
+                        f"Search line exceeds max_line_length: {path}"
+                    )
+                if predicate(line):
+                    matched = True
+                    # Keep scanning so the post-scan consistency check cannot
+                    # be skipped by an early return.
+                    for remaining in handle:
+                        if max_line_length is not None and len(remaining) > max_line_length:
+                            raise SearchError(
+                                f"Search line exceeds max_line_length: {path}"
+                            )
+                    break
+            else:
+                matched = False
         final = path.stat()
-        signature = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+        signature = lambda st: (
+            st.st_dev,
+            st.st_ino,
+            st.st_size,
+            st.st_mtime_ns,
+        )
         if signature(initial) != signature(final):
             raise SearchError(f"File changed during search: {path}")
+        return matched
     except SearchError:
         raise
     except (OSError, UnicodeError) as exc:
@@ -104,57 +130,94 @@ def _read_lines(path, encoding, max_file_size, max_line_length=None):
 
 
 def find_text(path, text, encoding="utf-8", max_file_size=DEFAULT_MAX_SEARCH_FILE_SIZE):
-    if not isinstance(text, str): raise TypeError("text must be a string")
-    encoding = _validate_encoding(encoding); results = []
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    encoding = _validate_encoding(encoding)
+    results = []
     for item in _walk(path):
         try:
-            if not item.is_file(): continue
-        except OSError as exc: raise SearchError(f"Unable to inspect {item}: {exc}") from exc
-        if any(text in line for line in _read_lines(item, encoding, max_file_size)):
+            if not item.is_file() or item.is_symlink():
+                continue
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
+        if _scan_file(item, encoding, max_file_size, lambda line: text in line):
             results.append(item)
     return _sorted_paths(results)
 
 
-def find_pattern(path, pattern, encoding="utf-8", max_file_size=DEFAULT_MAX_SEARCH_FILE_SIZE, max_line_length=DEFAULT_MAX_REGEX_LINE_LENGTH):
-    if not isinstance(pattern, str) or not pattern: raise InvalidPatternError("Pattern is required.")
+def find_pattern(
+    path,
+    pattern,
+    encoding="utf-8",
+    max_file_size=DEFAULT_MAX_SEARCH_FILE_SIZE,
+    max_line_length=DEFAULT_MAX_REGEX_LINE_LENGTH,
+):
+    if not isinstance(pattern, str) or not pattern:
+        raise InvalidPatternError("Pattern is required.")
     encoding = _validate_encoding(encoding)
-    try: regex = re.compile(pattern)
-    except re.error as exc: raise InvalidPatternError(str(exc)) from exc
+    try:
+        regex = re.compile(pattern)
+    except re.error as exc:
+        raise InvalidPatternError(str(exc)) from exc
     results = []
     for item in _walk(path):
         try:
-            if not item.is_file(): continue
-        except OSError as exc: raise SearchError(f"Unable to inspect {item}: {exc}") from exc
-        if any(regex.search(line) for line in _read_lines(item, encoding, max_file_size, max_line_length)):
+            if not item.is_file() or item.is_symlink():
+                continue
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
+        if _scan_file(
+            item,
+            encoding,
+            max_file_size,
+            regex.search,
+            max_line_length,
+        ):
             results.append(item)
     return _sorted_paths(results)
 
 
 def find_by_extension(path, extension):
-    if not isinstance(extension, str) or not extension.strip(): raise InvalidExtensionError("Extension is required.")
-    extension = extension.strip(); extension = extension if extension.startswith(".") else "." + extension
-    if extension == ".": raise InvalidExtensionError("Extension is required.")
+    if not isinstance(extension, str) or not extension.strip():
+        raise InvalidExtensionError("Extension is required.")
+    extension = extension.strip()
+    extension = extension if extension.startswith(".") else "." + extension
+    if extension == ".":
+        raise InvalidExtensionError("Extension is required.")
     results = []
     for item in _walk(path):
         try:
-            if item.is_file() and item.suffix.casefold() == extension.casefold(): results.append(item)
-        except OSError as exc: raise SearchError(f"Unable to inspect {item}: {exc}") from exc
+            if (
+                item.is_file()
+                and not item.is_symlink()
+                and item.suffix.casefold() == extension.casefold()
+            ):
+                results.append(item)
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
     return _sorted_paths(results)
 
 
 def find_by_size(path, minimum=None, maximum=None):
     for value, name in ((minimum, "minimum"), (maximum, "maximum")):
-        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+        if value is not None and (
+            not isinstance(value, int) or isinstance(value, bool) or value < 0
+        ):
             raise ValueError(f"{name} must be a non-negative integer or None")
     if minimum is not None and maximum is not None and minimum > maximum:
         raise ValueError("minimum cannot be greater than maximum")
     results = []
     for item in _walk(path):
         try:
-            if not item.is_file(): continue
+            if not item.is_file() or item.is_symlink():
+                continue
             size = item.stat().st_size
-        except OSError as exc: raise SearchError(f"Unable to inspect {item}: {exc}") from exc
-        if (minimum is not None and size < minimum) or (maximum is not None and size > maximum): continue
+        except OSError as exc:
+            raise SearchError(f"Unable to inspect {item}: {exc}") from exc
+        if (minimum is not None and size < minimum) or (
+            maximum is not None and size > maximum
+        ):
+            continue
         results.append(item)
     return _sorted_paths(results)
 
