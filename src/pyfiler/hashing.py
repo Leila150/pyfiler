@@ -13,8 +13,16 @@ def _normalize_algorithm(algorithm):
     aliases={"sha1":"sha1","sha224":"sha224","sha256":"sha256","sha384":"sha384","sha512":"sha512","sha512224":"sha512_224","sha512256":"sha512_256","sha3224":"sha3_224","sha3256":"sha3_256","sha3384":"sha3_384","sha3512":"sha3_512","md5":"md5","blake2b":"blake2b","blake2s":"blake2s"}
     if requested in aliases: return aliases[requested]
     available={name.lower().replace("-","").replace("_",""):name for name in hashlib.algorithms_available}
-    try: return available[requested]
+    try:
+        normalized=available[requested]
     except KeyError as exc: raise UnsupportedHashAlgorithmError(algorithm) from exc
+    try:
+        probe=hashlib.new(normalized)
+        if hasattr(probe,"digest_size") and probe.digest_size == 0:
+            raise UnsupportedHashAlgorithmError(algorithm)
+        probe.hexdigest()
+    except (TypeError,ValueError) as exc: raise UnsupportedHashAlgorithmError(algorithm) from exc
+    return normalized
 
 def file_hash(path,algorithm="sha256",chunk_size=1024*1024):
     normalized=_normalize_algorithm(algorithm)
