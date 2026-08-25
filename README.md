@@ -1,11 +1,11 @@
 # pyfiler
 
-**pyfiler** is a Python filesystem toolkit for working with files, folders, paths, searches, metadata, hashes, directory statistics, and storage information.
+**pyfiler** is a Python filesystem toolkit for working with files, folders, paths, searches, metadata, hashes, directory statistics, storage information, and secure rooted filesystem access.
 
-It provides two ways to work:
+It provides two main ways to work:
 
 - **Simple functions** for straightforward filesystem operations.
-- **`Explorer`** for applications that need all operations restricted to a configured root directory.
+- **`Explorer`** for applications that need operations restricted to a configured root directory.
 
 > **Status:** Active development. The public API may continue to grow.
 
@@ -79,7 +79,7 @@ pyfiler.edit_contents("hello.txt", "Completely new contents")
 
 ---
 
-# 📄 Files
+## 📄 Files
 
 Common file operations include:
 
@@ -121,7 +121,7 @@ Invalid line lists and invalid line numbers raise pyfiler exceptions instead of 
 
 ---
 
-# 📁 Folders
+## 📁 Folders
 
 Folder operations include:
 
@@ -151,11 +151,9 @@ for item in folder_contents(folder):
     print(item)
 ```
 
-`create_folder(..., contents=...)` can also populate a new folder from existing filesystem content.
-
 ---
 
-# 🔎 Searching
+## 🔎 Searching
 
 pyfiler supports recursive searching by several criteria.
 
@@ -184,7 +182,7 @@ Search operations use a consistent policy for symbolic links and safely handle m
 
 ---
 
-# 🧭 Paths
+## 🧭 Paths
 
 Path helpers make common path operations easier:
 
@@ -212,7 +210,7 @@ Other helpers include:
 
 ---
 
-# 📊 Metadata
+## 📊 Metadata
 
 Inspect filesystem objects with helpers such as:
 
@@ -239,7 +237,7 @@ Additional helpers include `exists`, `is_file`, `is_folder`, `is_empty`, `file_s
 
 ---
 
-# #️⃣ Hashing and comparison
+## #️⃣ Hashing and comparison
 
 Calculate file hashes:
 
@@ -257,11 +255,11 @@ from pyfiler import compare_files
 print(compare_files("hello.txt", "copy.txt"))
 ```
 
-Supported algorithms can be inspected through the hashing API rather than assuming a particular algorithm is available.
+Supported algorithms can be inspected through the hashing API.
 
 ---
 
-# 🌳 Directory statistics
+## 🌳 Directory statistics
 
 Analyze directories with:
 
@@ -285,7 +283,7 @@ These operations account for filesystem changes encountered during traversal rat
 
 ---
 
-# 🧭 Explorer
+## 🧭 Explorer
 
 `Explorer` provides a rooted interface for applications that should not freely access paths outside a configured directory.
 
@@ -308,9 +306,9 @@ Explorer provides filesystem operations, searching, metadata, path helpers, and 
 
 ---
 
-# 📱 Storage Information
+## 📱 Storage Information
 
-Storage is **not configured through `setup_storage()`**. The current API uses `storage_info` to inspect storage capabilities and filesystem information.
+Use `storage_info` to inspect storage availability, access capabilities, filesystem information, and disk usage.
 
 ```python
 import pyfiler.storage_info as storage_info
@@ -354,7 +352,7 @@ Useful storage helpers include:
 
 ---
 
-# 🔐 Security
+## 🔐 Security
 
 `Explorer` is designed for applications that need a filesystem boundary.
 
@@ -367,17 +365,15 @@ fs.create_file("safe.txt", "allowed")
 fs.create_file("../outside.txt", "blocked")
 ```
 
-pyfiler also performs validation for many invalid filesystem operations and exposes specialized exceptions for security violations, missing paths, file/folder conflicts, invalid lines, invalid patterns, hashing errors, and other failures.
+pyfiler performs validation for many invalid filesystem operations and exposes specialized exceptions for security violations, missing paths, file/folder conflicts, invalid lines, invalid patterns, hashing errors, and other failures.
 
 Symbolic links are handled conservatively by recursive search and directory-analysis operations.
 
 ---
 
-# ⚠️ Exceptions
+## ⚠️ Exceptions
 
 All package-specific exceptions inherit from `PyFilerError`.
-
-This lets you catch all pyfiler failures with one handler:
 
 ```python
 from pyfiler import PyFilerError
@@ -392,7 +388,7 @@ Specific exception classes are available when an application needs more precise 
 
 ---
 
-# 🧪 Testing
+## 🧪 Testing
 
 The repository includes a standalone test suite that does **not require pytest**.
 
@@ -406,7 +402,7 @@ The test runner prints each test result and exits with a non-zero status if a te
 
 ---
 
-# 📂 Project Structure
+## 📂 Project Structure
 
 ```text
 pyfiler/
@@ -437,10 +433,10 @@ pyfiler/
 
 ---
 
-# 📜 License
+## 📜 License
 
-pyfiler is **proprietary software** and is not released under MIT, Apache-2.0, GPL, BSD, or another open-source license.
+pyfiler is licensed under the **MIT License**.
 
-See [`LICENSE`](LICENSE) for the complete terms.
+See [`LICENSE`](LICENSE) for the complete license text.
 
-Copyright © 2026 Leila150. All rights reserved.
+Copyright © 2026 Leila150.
