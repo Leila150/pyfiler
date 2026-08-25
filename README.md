@@ -1,104 +1,299 @@
 # pyfiler
 
-**pyfiler** is a zero-dependency Python filesystem toolkit for creating, reading, editing, moving, copying, searching, inspecting, hashing, and organizing files and folders.
+**pyfiler** is a Python filesystem toolkit for working with files, folders, paths, searches, metadata, hashes, directory statistics, and storage information.
 
-It is designed around two styles: simple filesystem functions and the rooted `Explorer` API for safer application-level file management.
+It provides two ways to work:
 
-> **Status:** active development — API may grow, but the public functions documented here are the intended interface.
+- **Simple functions** for straightforward filesystem operations.
+- **`Explorer`** for applications that need all operations restricted to a configured root directory.
 
-## Highlights
+> **Status:** Active development. The public API may continue to grow.
 
-- 📄 File creation and content editing
-- 📝 Read specific 1-based lines
-- 📁 Folder creation and organization
-- 🔎 Recursive name, extension, text, regex, and size searching
-- 🧭 Path helpers
-- 📊 Metadata and filesystem inspection
-- 🔐 Root-restricted `Explorer`
-- #️⃣ File hashing and comparison
-- 🌳 Directory trees and statistics
-- 📱 Cross-platform storage information
+---
+
+## ✨ Features
+
+- 📄 Create, read, edit, append, clear, copy, move, rename, touch, and delete files
+- 📁 Create, list, clear, copy, move, rename, and delete folders
+- 🔎 Search by name, extension, text, regular expression, and size
+- 🧭 Path manipulation and inspection helpers
+- 📊 File and folder metadata
+- #️⃣ SHA-256, MD5, and other supported file hashes
+- 🔍 File comparison
+- 🌳 Directory trees and directory statistics
+- 🧭 Root-restricted `Explorer` API
+- 📱 Storage capability and filesystem information through `storage_info`
+- 🔐 Path-security checks
 - 🚫 No third-party runtime dependencies
 
-## Installation
+---
+
+## 📦 Installation
+
+From the repository:
 
 ```bash
 pip install .
 ```
 
-For development from a cloned repository:
+For development:
 
 ```bash
 pip install -e .
 ```
 
-## File API
+The runtime library uses Python's standard library and does not require third-party packages.
+
+---
+
+## 🚀 Quick Start
+
+### Create and read a file
 
 ```python
-from pyfiler import (
-    create_file,
-    get_contents,
-    add_contents,
-    remove_contents,
-    edit_contents,
+import pyfiler
+
+pyfiler.create_file(
+    "hello.txt",
+    "Hello, pyfiler!\nThis is line two.\n"
 )
 
-create_file("hello.txt", "line one\nline two\nline three\n")
-
-print(get_contents("hello.txt"))
-print(get_contents("hello.txt", [1, 3]))
-
-add_contents("hello.txt", "line four\n")
-remove_contents("hello.txt", [2])
-edit_contents("hello.txt", "completely replaced")
+print(pyfiler.get_contents("hello.txt"))
 ```
 
-### File operations
+### Read selected lines
 
-| Function | Purpose |
+Lines are **1-based**:
+
+```python
+print(pyfiler.get_contents("hello.txt", [1, 2]))
+```
+
+### Modify a file
+
+```python
+pyfiler.add_contents("hello.txt", "Line three.\n")
+pyfiler.remove_contents("hello.txt", [2])
+pyfiler.edit_contents("hello.txt", "Completely new contents")
+```
+
+---
+
+# 📄 Files
+
+Common file operations include:
+
+| Function | Description |
 |---|---|
-| `create_file(name, contents="", trajectory=None)` | Create a new file |
-| `get_contents(name, line_num=None, trajectory=None)` | Read all or selected lines |
-| `add_contents(name, contents, trajectory=None)` | Append text |
-| `remove_contents(name, line_num=None, trajectory=None)` | Remove selected lines or clear the file |
-| `edit_contents(name, contents, trajectory=None)` | Replace the complete file |
-| `delete_file(name, trajectory=None)` | Delete a file |
-| `copy_file(source, destination, overwrite=False)` | Copy a file |
-| `move_file(source, destination, overwrite=False)` | Move a file |
-| `rename_file(name, new_name)` | Rename a file |
-| `touch_file(name, trajectory=None)` | Create or touch a file |
-| `file_exists(name, trajectory=None)` | Check whether a path is a file |
-| `clear_file(name, trajectory=None)` | Empty an existing file |
+| `create_file()` | Create a new file |
+| `get_contents()` | Read all or selected lines |
+| `add_contents()` | Append contents |
+| `remove_contents()` | Remove selected lines or clear contents |
+| `edit_contents()` | Replace file contents |
+| `clear_file()` | Empty a file |
+| `touch_file()` | Create or touch a file |
+| `copy_file()` | Copy a file |
+| `move_file()` | Move a file |
+| `rename_file()` | Rename a file |
+| `delete_file()` | Delete a file |
+| `file_exists()` | Check whether a path is a file |
 
-`line_num` is a list of positive integers and uses **1-based line numbering**.
+Example:
 
-`trajectory` lets you supply the physical path separately from the logical `name`.
+```python
+from pyfiler import create_file, get_contents, copy_file
 
-## Folder API
+create_file("original.txt", "Hello")
+copy_file("original.txt", "backup.txt")
+
+print(get_contents("backup.txt"))
+```
+
+### Line numbers
+
+Line-based operations use **positive 1-based integers**:
+
+```python
+get_contents("file.txt", [1, 3, 5])
+```
+
+Invalid line lists and invalid line numbers raise pyfiler exceptions instead of silently doing the wrong thing.
+
+---
+
+# 📁 Folders
+
+Folder operations include:
+
+- `create_folder`
+- `add_parent`
+- `delete_folder`
+- `folder_contents`
+- `folder_remove_contents`
+- `list_dir`
+- `list_files`
+- `list_folders`
+- `clear_folder`
+- `copy_folder`
+- `move_folder`
+- `rename_folder`
+
+Example:
 
 ```python
 from pyfiler import create_folder, create_file, add_parent, folder_contents
 
 folder = create_folder("project")
-file = create_file("main.py", "print('hello')")
+file = create_file("main.py", "print('Hello')")
 add_parent(file, folder)
 
 for item in folder_contents(folder):
     print(item)
 ```
 
-Available folder operations include `create_folder`, `add_parent`, `delete_folder`, `folder_contents`, `folder_remove_contents`, `list_dir`, `list_files`, `list_folders`, `clear_folder`, `copy_folder`, `move_folder`, and `rename_folder`.
+`create_folder(..., contents=...)` can also populate a new folder from existing filesystem content.
 
-`create_folder(..., contents=...)` can populate a new folder from existing files or folders.
+---
 
-## Explorer
+# 🔎 Searching
 
-`Explorer` confines relative and absolute paths to one configured root.
+pyfiler supports recursive searching by several criteria.
+
+```python
+from pyfiler import find, find_files, search_contents, search_regex
+
+print(find(".", "*.py"))
+print(find_files(".", "*.py"))
+print(search_contents(".", "pyfiler"))
+print(search_regex(".", r"def\s+\w+"))
+```
+
+Search capabilities include:
+
+| Operation | Purpose |
+|---|---|
+| `find` | Find matching paths |
+| `find_files` | Find files |
+| `find_folders` | Find folders |
+| `search_contents` | Search file contents |
+| `search_regex` | Search contents using regex |
+| `find_extension` / `find_by_extension` | Find by extension |
+| `find_by_size` | Find files by size |
+
+Search operations use a consistent policy for symbolic links and safely handle many filesystem changes encountered during traversal.
+
+---
+
+# 🧭 Paths
+
+Path helpers make common path operations easier:
+
+```python
+from pyfiler import absolute, relative, parent, filename, extension
+
+print(absolute("hello.txt"))
+print(relative("project/hello.txt", "project"))
+print(parent("project/hello.txt"))
+print(filename("project/hello.txt"))
+print(extension("project/hello.txt"))
+```
+
+Other helpers include:
+
+- `stem`
+- `join`
+- `normalize`
+- `common_path`
+- `path_kind`
+- `same_type`
+- `with_extension`
+- `is_pathlike`
+- root detection helpers
+
+---
+
+# 📊 Metadata
+
+Inspect filesystem objects with helpers such as:
+
+```python
+from pyfiler import metadata
+
+info = metadata("hello.txt")
+print(info)
+```
+
+Metadata can include:
+
+- Path
+- Type
+- Size
+- Extension
+- Timestamps
+- File/folder status
+- Empty status
+- Permissions
+- Other filesystem information
+
+Additional helpers include `exists`, `is_file`, `is_folder`, `is_empty`, `file_size`, `file_extension`, `created_at`, `modified_at`, `accessed_at`, `permissions`, `name_of`, `stem_of`, `extension_of`, and `path_kind`.
+
+---
+
+# #️⃣ Hashing and comparison
+
+Calculate file hashes:
+
+```python
+from pyfiler import hash_file
+
+print(hash_file("hello.txt", "sha256"))
+```
+
+Compare files:
+
+```python
+from pyfiler import compare_files
+
+print(compare_files("hello.txt", "copy.txt"))
+```
+
+Supported algorithms can be inspected through the hashing API rather than assuming a particular algorithm is available.
+
+---
+
+# 🌳 Directory statistics
+
+Analyze directories with:
+
+- `tree`
+- `folder_size`
+- `count_files`
+- `count_folders`
+- `extension_stats`
+
+Example:
+
+```python
+from pyfiler import tree, folder_size, count_files
+
+print(tree("project"))
+print(folder_size("project"))
+print(count_files("project"))
+```
+
+These operations account for filesystem changes encountered during traversal rather than assuming a directory remains completely unchanged while it is being inspected.
+
+---
+
+# 🧭 Explorer
+
+`Explorer` provides a rooted interface for applications that should not freely access paths outside a configured directory.
 
 ```python
 from pyfiler import Explorer
 
 fs = Explorer("workspace", create=True)
+
 fs.create_folder("src")
 fs.create_file("src/main.py", "print('Hello')")
 
@@ -107,84 +302,132 @@ print(fs.get_contents("src/main.py"))
 print(fs.metadata("src/main.py"))
 ```
 
-Explorer also exposes file operations, folder operations, searching, metadata checks, copying, moving, and path helpers. Attempts to escape the root are rejected.
+Paths that attempt to escape the configured root are rejected.
 
-## Search
+Explorer provides filesystem operations, searching, metadata, path helpers, and security checks through the same rooted interface.
 
-```python
-from pyfiler import find, find_files, search_contents, search_regex
+---
 
-print(find(".", "*.py"))
-print(find_files(".", "*.py"))
-print(search_contents(".", "pyfiler"))
-print(search_regex(".", r"def\\s+\\w+"))
-```
+# 📱 Storage Information
 
-## Metadata and paths
-
-Useful helpers include `exists`, `is_file`, `is_folder`, `is_empty`, `file_size`, `file_extension`, `created_at`, `modified_at`, `accessed_at`, `metadata`, `permissions`, `file_name`, `file_stem`, `path_kind`, `same_type`, `absolute`, `relative`, `parent`, `filename`, `extension`, `stem`, `join`, and `normalize`.
-
-`metadata()` returns the path, type, size, extension, timestamps, and boolean file/folder/empty information.
-
-## Hashing and comparison
+Storage is **not configured through `setup_storage()`**. The current API uses `storage_info` to inspect storage capabilities and filesystem information.
 
 ```python
-from pyfiler import hash_file, compare_files
+import pyfiler.storage_info as storage_info
 
-print(hash_file("hello.txt", "sha256"))
-print(compare_files("hello.txt", "copy.txt"))
+print(storage_info.storage())
+print(storage_info.readable())
+print(storage_info.writable())
+print(storage_info.filesystem())
+print(storage_info.free_space())
 ```
 
-## Trees and statistics
-
-`tree`, `folder_size`, `count_files`, `count_folders`, and `extension_stats` provide quick directory analysis.
-
-## Storage
+For a complete status object:
 
 ```python
-from pyfiler import setup_storage
+info = storage_info.check()
 
-storage = setup_storage()
-print(storage.platform)
-print(storage.path)
-print(storage.permission_granted)
+print(info.available)
+print(info.readable)
+print(info.writable)
+print(info.permission_granted)
+print(info.total_bytes)
+print(info.free_bytes)
+print(info.used_bytes)
+print(info.filesystem)
+print(info.platform)
 ```
 
-`setup_storage()` provides filesystem/storage information. Python itself cannot silently grant Android or iOS OS permissions; the host application must request those permissions through the platform APIs.
+Useful storage helpers include:
 
-## Exceptions
+- `storage()` / `available()` — determine whether storage is available
+- `readable()` / `writable()` — inspect access capabilities
+- `can_read()` / `can_write()` / `can_execute()` — permission checks
+- `write_test()` — perform a real temporary write test
+- `check()` — return structured storage information
+- `disk_usage()` — inspect filesystem capacity
+- `total_space()` / `free_space()` / `used_space()` — capacity helpers
+- `filesystem()` — identify the filesystem when supported
+- `home_directory()` / `current_directory()` / `temporary_directory()` — useful locations
 
-All package-specific exceptions inherit from `PyFilerError`. pyfiler provides specialized errors for missing paths, invalid lines, file/folder conflicts, copying/moving failures, security violations, storage problems, hashing, comparisons, and other filesystem operations.
+> **Platform permissions:** pyfiler can inspect whether storage is accessible, but it cannot grant operating-system permissions. Android, iOS, and other platforms may require the host application to request access through their platform-specific APIs.
 
-Catch `PyFilerError` when you want one handler for pyfiler failures, or catch a specific exception when you need precise handling.
+---
 
-## Testing
+# 🔐 Security
 
-The repository test suite uses the Python standard library and can be run without installing pytest:
+`Explorer` is designed for applications that need a filesystem boundary.
+
+```python
+fs = Explorer("workspace", create=True)
+
+fs.create_file("safe.txt", "allowed")
+
+# Attempts to escape the root are rejected.
+fs.create_file("../outside.txt", "blocked")
+```
+
+pyfiler also performs validation for many invalid filesystem operations and exposes specialized exceptions for security violations, missing paths, file/folder conflicts, invalid lines, invalid patterns, hashing errors, and other failures.
+
+Symbolic links are handled conservatively by recursive search and directory-analysis operations.
+
+---
+
+# ⚠️ Exceptions
+
+All package-specific exceptions inherit from `PyFilerError`.
+
+This lets you catch all pyfiler failures with one handler:
+
+```python
+from pyfiler import PyFilerError
+
+try:
+    ...
+except PyFilerError as exc:
+    print(f"PyFiler error: {exc}")
+```
+
+Specific exception classes are available when an application needs more precise error handling.
+
+---
+
+# 🧪 Testing
+
+The repository includes a standalone test suite that does **not require pytest**.
+
+From the repository root:
 
 ```bash
 python tests/test_pyfiler.py
 ```
 
-## Project layout
+The test runner prints each test result and exits with a non-zero status if a test fails.
+
+---
+
+# 📂 Project Structure
 
 ```text
 pyfiler/
-├── src/pyfiler/
-│   ├── __init__.py
-│   ├── comparison.py
-│   ├── exceptions.py
-│   ├── explorer.py
-│   ├── files.py
-│   ├── folders.py
-│   ├── hashing.py
-│   ├── metadata.py
-│   ├── paths.py
-│   ├── search.py
-│   ├── storage.py
-│   ├── tree.py
-│   └── utils.py
+├── src/
+│   └── pyfiler/
+│       ├── __init__.py
+│       ├── comparison.py
+│       ├── exceptions.py
+│       ├── explorer.py
+│       ├── files.py
+│       ├── folders.py
+│       ├── hashing.py
+│       ├── metadata.py
+│       ├── path_utils.py
+│       ├── paths.py
+│       ├── search.py
+│       ├── storage_info.py
+│       ├── tree.py
+│       └── utils.py
 ├── tests/
+│   └── test_pyfiler.py
 ├── examples/
 ├── README.md
 ├── LICENSE
@@ -192,10 +435,12 @@ pyfiler/
 └── .gitignore
 ```
 
-## License
+---
 
-pyfiler is **proprietary software**. It is not released under MIT, Apache-2.0, GPL, BSD, or another open-source license.
+# 📜 License
 
-See [`LICENSE`](LICENSE) for the complete terms. In particular, copying, modifying, redistributing, sublicensing, or publishing derivative versions is not permitted without explicit written authorization from the copyright holder.
+pyfiler is **proprietary software** and is not released under MIT, Apache-2.0, GPL, BSD, or another open-source license.
+
+See [`LICENSE`](LICENSE) for the complete terms.
 
 Copyright © 2026 Leila150. All rights reserved.
