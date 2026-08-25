@@ -11,22 +11,16 @@ from .exceptions import *
 
 
 def _validate_encoding(encoding):
-    if not isinstance(encoding, str) or not encoding.strip():
-        raise InvalidEncodingError("encoding must be a non-empty string")
+    if not isinstance(encoding, str) or not encoding.strip(): raise InvalidEncodingError("encoding must be a non-empty string")
     return encoding
 
 
 def _atomic_write_text(path, contents, encoding):
-    path = Path(path)
-    temporary = None
+    path=Path(path); temporary=None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding=encoding, dir=path.parent, prefix=f".{path.name}.", suffix=".pyfiler-tmp", delete=False) as handle:
-            temporary = Path(handle.name)
-            handle.write(contents)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        temporary = None
+        with tempfile.NamedTemporaryFile(mode="w",encoding=encoding,dir=path.parent,prefix=f".{path.name}.",suffix=".pyfiler-tmp",delete=False) as handle:
+            temporary=Path(handle.name); handle.write(contents); handle.flush(); os.fsync(handle.fileno())
+        os.replace(temporary,path); temporary=None
     except Exception:
         if temporary is not None:
             try: temporary.unlink(missing_ok=True)
@@ -34,42 +28,39 @@ def _atomic_write_text(path, contents, encoding):
         raise
 
 
-def _temporary_path(directory, prefix, suffix):
-    handle = tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix=suffix, delete=False)
-    path = Path(handle.name); handle.close(); path.unlink(missing_ok=True)
-    return path
+def _temporary_path(directory,prefix,suffix):
+    handle=tempfile.NamedTemporaryFile(dir=directory,prefix=prefix,suffix=suffix,delete=False); path=Path(handle.name); handle.close(); path.unlink(missing_ok=True); return path
 
-
-def _restore_backup(backup, destination):
+def _restore_backup(backup,destination):
     if backup is None or not backup.exists() or destination.exists(): return False
-    try:
-        os.replace(backup, destination); return True
+    try: os.replace(backup,destination); return True
     except OSError: return False
 
-
-def read_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
-    encoding = _validate_encoding(encoding); path = ensure_file(trajectory if trajectory is not None else name)
-    try: text = path.read_text(encoding=encoding)
+def read_contents(name,line_num=None,trajectory=None,encoding="utf-8"):
+    encoding=_validate_encoding(encoding); path=ensure_file(trajectory if trajectory is not None else name)
+    try: text=path.read_text(encoding=encoding)
     except UnicodeError as exc: raise InvalidEncodingError(str(exc)) from exc
     except OSError as exc: raise FileReadError(str(path)) from exc
     if line_num is None: return text
-    validate_lines(line_num); lines = text.splitlines(keepends=True); result=[]
+    validate_lines(line_num); lines=text.splitlines(keepends=True); result=[]
     for number in line_num:
-        if number > len(lines): raise LineOutOfRangeError(f"Line {number} does not exist in {path}.")
+        if number>len(lines): raise LineOutOfRangeError(f"Line {number} does not exist in {path}.")
         result.append(lines[number-1])
     return "".join(result)
 
 
-def append_contents(name, contents, trajectory=None, encoding="utf-8"):
+def append_contents(name,contents,trajectory=None,encoding="utf-8"):
+    """Append atomically by rebuilding the file in the same directory."""
     validate_contents(contents); encoding=_validate_encoding(encoding); path=ensure_file(trajectory if trajectory is not None else name)
     try:
-        with path.open("a", encoding=encoding) as file: file.write(contents)
+        existing=path.read_text(encoding=encoding)
+        _atomic_write_text(path,existing+contents,encoding)
     except UnicodeError as exc: raise InvalidEncodingError(str(exc)) from exc
     except OSError as exc: raise FileAppendError(str(path)) from exc
     return path
 
 
-def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
+def remove_contents(name,line_num=None,trajectory=None,encoding="utf-8"):
     encoding=_validate_encoding(encoding); path=ensure_file(trajectory if trajectory is not None else name)
     if line_num is None: return replace_contents(name,"",trajectory,encoding)
     validate_lines(line_num)
@@ -78,7 +69,7 @@ def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
     except OSError as exc: raise FileReadError(str(path)) from exc
     requested=sorted(set(line_num),reverse=True)
     for number in requested:
-        if number > len(lines): raise LineOutOfRangeError(f"Line {number} does not exist in {path}.")
+        if number>len(lines): raise LineOutOfRangeError(f"Line {number} does not exist in {path}.")
     for number in requested: del lines[number-1]
     try: _atomic_write_text(path,"".join(lines),encoding)
     except UnicodeError as exc: raise InvalidEncodingError(str(exc)) from exc
@@ -86,7 +77,7 @@ def remove_contents(name, line_num=None, trajectory=None, encoding="utf-8"):
     return path
 
 
-def replace_contents(name, contents, trajectory=None, encoding="utf-8"):
+def replace_contents(name,contents,trajectory=None,encoding="utf-8"):
     validate_contents(contents); encoding=_validate_encoding(encoding); path=ensure_file(trajectory if trajectory is not None else name)
     try: _atomic_write_text(path,contents,encoding)
     except UnicodeError as exc: raise InvalidEncodingError(str(exc)) from exc
@@ -94,7 +85,7 @@ def replace_contents(name, contents, trajectory=None, encoding="utf-8"):
     return path
 
 
-def create_file(name, contents="", trajectory=None, encoding="utf-8"):
+def create_file(name,contents="",trajectory=None,encoding="utf-8"):
     validate_contents(contents); encoding=_validate_encoding(encoding); path=to_path(trajectory if trajectory is not None else name)
     try:
         path.parent.mkdir(parents=True,exist_ok=True)
@@ -105,7 +96,7 @@ def create_file(name, contents="", trajectory=None, encoding="utf-8"):
     return path
 
 
-def delete_file(name, trajectory=None):
+def delete_file(name,trajectory=None):
     path=ensure_file(trajectory if trajectory is not None else name)
     try: path.unlink()
     except OSError as exc: raise FileDeleteError(str(path)) from exc
@@ -135,7 +126,6 @@ def copy_file(source,destination,overwrite=False):
 
 
 def move_file(source,destination,overwrite=False):
-    """Move a file with rollback protection, including cross-device moves."""
     if not isinstance(overwrite,bool): raise TypeError("overwrite must be a boolean")
     src,dst=ensure_file(source),to_path(destination)
     if src.resolve()==dst.resolve(): raise SourceEqualsDestinationError(str(src))
@@ -146,25 +136,20 @@ def move_file(source,destination,overwrite=False):
     except OSError: same_device=False
     try:
         if same_device:
-            if overwrite and dst.exists():
-                backup=_temporary_path(dst.parent,f".{dst.name}.",".pyfiler-backup"); os.replace(dst,backup)
+            if overwrite and dst.exists(): backup=_temporary_path(dst.parent,f".{dst.name}.",".pyfiler-backup"); os.replace(dst,backup)
             try: os.replace(src,dst)
             except OSError: _restore_backup(backup,dst); raise
         else:
             with tempfile.NamedTemporaryFile(dir=dst.parent,prefix=f".{dst.name}.",suffix=".pyfiler-tmp",delete=False) as handle: temporary=Path(handle.name)
             shutil.copy2(src,temporary)
-            if overwrite and dst.exists():
-                backup=_temporary_path(dst.parent,f".{dst.name}.",".pyfiler-backup"); os.replace(dst,backup)
+            if overwrite and dst.exists(): backup=_temporary_path(dst.parent,f".{dst.name}.",".pyfiler-backup"); os.replace(dst,backup)
             try:
                 os.replace(temporary,dst); temporary=None
                 try: src.unlink()
                 except OSError:
-                    # Roll back the destination when source removal fails so a
-                    # failed move does not silently create a second copy.
                     try: dst.unlink()
                     except OSError: pass
-                    _restore_backup(backup,dst)
-                    raise
+                    _restore_backup(backup,dst); raise
             except OSError:
                 if not dst.exists(): _restore_backup(backup,dst)
                 raise
