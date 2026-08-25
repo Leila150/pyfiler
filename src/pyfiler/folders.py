@@ -15,9 +15,24 @@ def _direct_child_name(name):
 def _temporary_destination(parent,prefix):
     handle=tempfile.NamedTemporaryFile(dir=parent,prefix=prefix,suffix=".pyfiler-stage",delete=False); candidate=Path(handle.name); handle.close(); candidate.unlink(missing_ok=True); return candidate
 
+def _reject_symlink_tree(source):
+    """Reject symlinks before recursively copying a folder.
+
+    Following a source symlink during a copy can copy data outside the source
+    tree. PyFiler's safe default is to reject such trees rather than silently
+    dereference them or create escaped links in the destination.
+    """
+    try:
+        if source.is_symlink(): raise SymlinkTraversalError(f"Symlink source is not allowed: {source}")
+        for item in source.rglob("*"):
+            if item.is_symlink(): raise SymlinkTraversalError(f"Symlink source is not allowed: {item}")
+    except SymlinkTraversalError: raise
+    except OSError as exc: raise FolderCopyError(str(source)) from exc
+
 def _copy_tree_staged(source,parent,name):
+    _reject_symlink_tree(source)
     stage=_temporary_destination(parent,f".{name}.")
-    try: shutil.copytree(source,stage,symlinks=True); return stage
+    try: shutil.copytree(source,stage,symlinks=False); return stage
     except Exception:
         try: shutil.rmtree(stage)
         except OSError: pass
@@ -41,6 +56,7 @@ def create_folder(name,contents=None,trajectory=None):
         if not source.exists(): raise PathNotFoundError(str(source))
         if source_resolved==target: raise SourceEqualsDestinationError(str(source))
         if source.is_dir() and target.is_relative_to(source_resolved): raise RecursiveOperationError(f"Cannot copy {source} into its own descendant {path}.")
+        if source.is_symlink(): raise SymlinkTraversalError(f"Symlink source is not allowed: {source}")
         sources.append(source)
     stage=None
     try:
@@ -49,7 +65,7 @@ def create_folder(name,contents=None,trajectory=None):
             destination=stage/source.name
             if destination.exists(): raise DestinationExistsError(str(destination))
             if source.is_file(): shutil.copy2(source,destination,follow_symlinks=False)
-            elif source.is_dir(): shutil.copytree(source,destination,symlinks=True)
+            elif source.is_dir(): _copy_tree_staged(source,stage,source.name); os.replace(stage/source.name, destination)
             else: raise InvalidOperationError(f"Unsupported source type: {source}")
         if path.exists(): raise FolderExistsError(str(path))
         stage.rename(path); stage=None
@@ -64,8 +80,7 @@ def create_folder(name,contents=None,trajectory=None):
 def move_into(child,parent):
     source=to_path(child); destination_folder=ensure_folder(parent)
     if not source.exists(): raise PathNotFoundError(str(source))
-    destination=destination_folder/source.name
-    source_resolved=source.resolve(); parent_resolved=destination_folder.resolve()
+    destination=destination_folder/source.name; source_resolved=source.resolve(); parent_resolved=destination_folder.resolve()
     if source_resolved==destination.resolve(): raise SourceEqualsDestinationError(str(source))
     if destination.exists(): raise DestinationExistsError(str(destination))
     if source.is_dir() and parent_resolved.is_relative_to(source_resolved): raise RecursiveOperationError(f"Cannot move {source} into its own descendant {destination_folder}.")
@@ -73,14 +88,12 @@ def move_into(child,parent):
         if source.is_file():
             from .files import move_file
             return move_file(source,destination,overwrite=False)
-        if source.is_dir():
-            return move_folder(source,destination,overwrite=False)
+        if source.is_dir(): return move_folder(source,destination,overwrite=False)
         raise InvalidOperationError(f"Unsupported source type: {source}")
     except PyFilerError: raise
     except OSError as exc: raise OperationError(str(source)) from exc
 
 def list_folder(path): return sorted(ensure_folder(path).iterdir(),key=lambda p:(p.name.casefold(),p.name))
-
 def _validate_children(folder,children):
     if not isinstance(children,list) or not all(isinstance(x,str) for x in children): raise ContentTypeError("children must be a list of strings.")
     targets=[]; seen=set()
@@ -170,13 +183,9 @@ def move_folder(source,destination,overwrite=False):
                 os.replace(stage,dst); stage=None
                 try: shutil.rmtree(src)
                 except OSError:
-                    # Cross-device move is not atomic. If source removal fails,
-                    # remove the newly installed destination and restore the
-                    # previous destination where possible.
                     try: shutil.rmtree(dst)
                     except OSError: pass
-                    _restore_backup(backup,dst)
-                    raise
+                    _restore_backup(backup,dst); raise
             except OSError:
                 if not dst.exists(): _restore_backup(backup,dst)
                 raise
